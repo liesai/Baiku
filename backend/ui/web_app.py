@@ -240,8 +240,10 @@ def run_web_ui(
             color: #e2e8f0 !important;
           }
           .ve-scene {
+            display: block;
             position: relative;
             width: 100%;
+            min-width: 100%;
             height: 132px;
             border: 1px solid rgba(56, 189, 248, 0.35);
             border-radius: 12px;
@@ -610,7 +612,7 @@ def run_web_ui(
                   </div>
                 </div>
                 """
-            )
+            ).classes("w-full")
 
         with ui.card().classes("w-full gb-card gb-compact"):
             live_chart = ui.echart(
