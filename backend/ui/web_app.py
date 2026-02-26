@@ -44,6 +44,7 @@ ACTION_SWITCH_MIN_SEC = 2.0
 ASSETS_ROUTE = "/velox-assets"
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 SPRITE_URL = f"{ASSETS_ROUTE}/cyclist_sprite.png"
+SCENE_BG_URL = f"{ASSETS_ROUTE}/forest_bg.png"
 _ASSETS_MOUNTED = False
 
 
@@ -257,66 +258,64 @@ def run_web_ui(
             position: relative;
             width: 100%;
             min-width: 100%;
-            height: 132px;
+            height: 144px;
             border: 1px solid rgba(56, 189, 248, 0.35);
             border-radius: 12px;
             overflow: hidden;
-            background: linear-gradient(180deg, #071a43 0%, #0d2c67 52%, #0a1b35 100%);
-            --ve-road-offset: 0px;
-            --ve-mtn-offset: 0px;
-            --ve-cloud-offset: 0px;
+            background: linear-gradient(180deg, #0a2a4e 0%, #15426d 58%, #0f2f52 100%);
+            --ve-bg-far-offset: 0px;
+            --ve-bg-mid-offset: 0px;
+            --ve-bg-near-offset: 0px;
             --ve-pedal-rot: 0deg;
             --ve-rider-bob: 0px;
+            --ve-sprite-shift-x: 0px;
           }
           .ve-scene[data-zone="ok"] { box-shadow: inset 0 0 0 2px rgba(34,197,94,.25); }
           .ve-scene[data-zone="bad"] { box-shadow: inset 0 0 0 2px rgba(239,68,68,.25); }
           .ve-scene[data-action="up"] .ve-hud-action { color: #f59e0b; }
           .ve-scene[data-action="down"] .ve-hud-action { color: #ef4444; }
           .ve-scene[data-action="steady"] .ve-hud-action { color: #22c55e; }
-          .ve-clouds {
+          .ve-bg {
             position: absolute;
-            inset: 8px 0 auto 0;
-            height: 24px;
-            opacity: 0.9;
-            background-image:
-              radial-gradient(circle at 16px 10px, rgba(226,232,240,.65) 0 8px, transparent 9px),
-              radial-gradient(circle at 52px 12px, rgba(226,232,240,.5) 0 10px, transparent 11px),
-              radial-gradient(circle at 120px 8px, rgba(226,232,240,.55) 0 8px, transparent 9px),
-              radial-gradient(circle at 156px 14px, rgba(226,232,240,.45) 0 9px, transparent 10px);
-            background-size: 210px 24px;
-            background-position-x: var(--ve-cloud-offset);
+            left: 0;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            background-image: url('__SCENE_BG_URL__');
+            background-repeat: repeat-x;
+            background-size: auto 100%;
+            image-rendering: pixelated;
           }
-          .ve-mountains {
-            position: absolute;
-            inset: 26px 0 42px 0;
-            background-image:
-              linear-gradient(135deg, transparent 38%, rgba(148,163,184,.4) 39%, transparent 41%),
-              linear-gradient(45deg, transparent 38%, rgba(56,189,248,.3) 39%, transparent 41%);
-            background-size: 120px 45px, 160px 60px;
-            background-position-x: var(--ve-mtn-offset), calc(var(--ve-mtn-offset) * 0.66);
+          .ve-bg-far {
+            opacity: 0.6;
+            transform: scale(1.08);
+            background-position-x: var(--ve-bg-far-offset);
+            filter: blur(0.2px) saturate(0.9);
           }
-          .ve-trees {
-            position: absolute;
-            left: 0; right: 0; bottom: 30px; height: 26px;
-            background-image:
-              linear-gradient(160deg, transparent 43%, rgba(16,185,129,.45) 44%, transparent 45%),
-              linear-gradient(20deg, transparent 43%, rgba(16,185,129,.35) 44%, transparent 45%);
-            background-size: 52px 24px, 72px 24px;
-            background-position-x:
-              calc(var(--ve-road-offset) * .48),
-              calc(var(--ve-road-offset) * .38);
+          .ve-bg-mid {
+            opacity: 0.8;
+            transform: scale(1.03);
+            background-position-x: var(--ve-bg-mid-offset);
+            filter: saturate(1.0);
+          }
+          .ve-bg-near {
+            opacity: 0.97;
+            background-position-x: var(--ve-bg-near-offset);
+            filter: saturate(1.08) contrast(1.03);
           }
           .ve-road {
             position: absolute;
-            left: 0; right: 0; bottom: 0;
-            height: 32px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 30px;
             background:
               repeating-linear-gradient(
                 90deg,
                 rgba(2,6,23,.45) 0 22px,
                 rgba(15,23,42,.85) 22px 44px
               );
-            background-position-x: var(--ve-road-offset);
+            background-position-x: var(--ve-bg-near-offset);
           }
           .ve-road::before {
             content: "";
@@ -334,11 +333,12 @@ def run_web_ui(
           }
           .ve-rider {
             position: absolute;
-            left: 70px;
-            bottom: 16px;
+            left: 74px;
+            bottom: 14px;
             width: 112px;
             height: 74px;
             transform: translateY(var(--ve-rider-bob));
+            z-index: 5;
           }
           .ve-sprite {
             position: absolute;
@@ -348,6 +348,7 @@ def run_web_ui(
             background-repeat: no-repeat;
             background-size: 300% 100%;
             background-position: 0% 0;
+            transform: translateX(var(--ve-sprite-shift-x));
             filter: drop-shadow(0 2px 2px rgba(2, 6, 23, 0.45));
           }
           .ve-hud {
@@ -385,16 +386,16 @@ def run_web_ui(
             };
             const s = Math.max(0, Number(speed || 0));
             const c = Math.max(0, Number(cadence || 0));
-            state.road = (state.road - (s * 1.9)) % 880;
-            state.mountain = (state.mountain - Math.max(0.2, s * 0.35)) % 880;
-            state.cloud = (state.cloud - Math.max(0.1, s * 0.22)) % 600;
+            state.cloud = (state.cloud - Math.max(0.1, s * 0.12)) % 900;
+            state.mountain = (state.mountain - Math.max(0.2, s * 0.24)) % 900;
+            state.road = (state.road - (s * 0.65)) % 900;
             state.pedal = (state.pedal + (c * 0.92)) % 360;
             state.bobTick += 0.35;
             state.frameTick += Math.max(0.25, c / 65);
             const bob = Math.sin(state.bobTick + c / 20) * Math.min(2.5, 0.6 + c / 65);
-            scene.style.setProperty('--ve-road-offset', `${state.road}px`);
-            scene.style.setProperty('--ve-mtn-offset', `${state.mountain}px`);
-            scene.style.setProperty('--ve-cloud-offset', `${state.cloud}px`);
+            scene.style.setProperty('--ve-bg-far-offset', `${state.cloud}px`);
+            scene.style.setProperty('--ve-bg-mid-offset', `${state.mountain}px`);
+            scene.style.setProperty('--ve-bg-near-offset', `${state.road}px`);
             scene.style.setProperty('--ve-pedal-rot', `${state.pedal}deg`);
             scene.style.setProperty('--ve-rider-bob', `${bob}px`);
             scene.dataset.zone = inZone ? 'ok' : 'bad';
@@ -402,7 +403,9 @@ def run_web_ui(
             if (spriteNode) {
               const frame = Math.floor(state.frameTick) % 3;
               const x = frame * 50;
+              const shiftByFrame = [0, -1.5, -0.5];
               spriteNode.style.backgroundPosition = `${x}% 0%`;
+              scene.style.setProperty('--ve-sprite-shift-x', `${shiftByFrame[frame]}px`);
             }
             if (speedNode) speedNode.textContent = `${s.toFixed(1)} km/h`;
             if (actionNode) {
@@ -413,7 +416,9 @@ def run_web_ui(
             window.__velox_scene_state = state;
           };
         </script>
-        """.replace("__SPRITE_URL__", SPRITE_URL)
+        """
+        .replace("__SPRITE_URL__", SPRITE_URL)
+        .replace("__SCENE_BG_URL__", SCENE_BG_URL)
     )
 
     templates = list_templates()
@@ -575,9 +580,9 @@ def run_web_ui(
             ui.html(
                 """
                 <div id="ve-scene" class="ve-scene" data-zone="ok">
-                  <div class="ve-clouds"></div>
-                  <div class="ve-mountains"></div>
-                  <div class="ve-trees"></div>
+                  <div class="ve-bg ve-bg-far"></div>
+                  <div class="ve-bg ve-bg-mid"></div>
+                  <div class="ve-bg ve-bg-near"></div>
                   <div class="ve-road"></div>
                   <div class="ve-hud">
                     <span id="ve-scene-action" class="ve-hud-action">HOLD</span>
