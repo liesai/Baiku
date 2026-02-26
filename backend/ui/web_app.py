@@ -9,7 +9,7 @@ import time
 from typing import Any, cast
 from uuid import uuid4
 
-from nicegui import core, ui
+from nicegui import app, core, ui
 
 from backend.ble.ftms_client import IndoorBikeData, ScannedDevice
 from backend.ui.coaching import ActionStabilizer, compute_coaching_signal
@@ -41,6 +41,10 @@ MAX_CADENCE_RPM = 130
 MAX_SPEED_KMH = 70
 TIMELINE_SAMPLE_SEC = 2
 ACTION_SWITCH_MIN_SEC = 2.0
+ASSETS_ROUTE = "/velox-assets"
+ASSETS_DIR = Path(__file__).resolve().parent / "assets"
+SPRITE_URL = f"{ASSETS_ROUTE}/cyclist_sprite.png"
+_ASSETS_MOUNTED = False
 
 
 @dataclass
@@ -159,6 +163,15 @@ def run_web_ui(
     port: int = 8088,
     start_delay_sec: int = 10,
 ) -> int:
+    global _ASSETS_MOUNTED
+    if not _ASSETS_MOUNTED:
+        try:
+            app.add_static_files(ASSETS_ROUTE, str(ASSETS_DIR))
+        except Exception:
+            # Route might already be mounted during hot reload.
+            pass
+        _ASSETS_MOUNTED = True
+
     controller = UIController(debug_ftms=False, simulate_ht=simulate_ht)
     state = WebState()
     ui.add_head_html(
@@ -323,57 +336,20 @@ def run_web_ui(
             position: absolute;
             left: 70px;
             bottom: 16px;
-            width: 120px;
-            height: 78px;
+            width: 112px;
+            height: 74px;
             transform: translateY(var(--ve-rider-bob));
           }
-          .ve-body {
-            position: absolute; left: 49px; top: 22px;
-            width: 24px; height: 20px; background: #f8fafc;
-            border: 1px solid rgba(30,41,59,.6);
-          }
-          .ve-jersey {
-            position: absolute; left: 49px; top: 29px;
-            width: 24px; height: 12px; background: #22d3ee;
-          }
-          .ve-head {
-            position: absolute; left: 54px; top: 10px;
-            width: 14px; height: 14px; background: #fef3c7; border-radius: 3px;
-            border: 1px solid rgba(30,41,59,.55);
-          }
-          .ve-helmet {
-            position: absolute; left: 52px; top: 7px;
-            width: 18px; height: 7px; background: #0ea5e9; border-radius: 3px 3px 0 0;
-          }
-          .ve-frame {
-            position: absolute; left: 30px; top: 44px;
-            width: 56px; height: 4px; background: #22d3ee;
-          }
-          .ve-seat {
-            position: absolute; left: 57px; top: 38px;
-            width: 13px; height: 4px; background: #111827;
-          }
-          .ve-handle {
-            position: absolute; left: 84px; top: 38px;
-            width: 10px; height: 3px; background: #e2e8f0;
-          }
-          .ve-wheel {
+          .ve-sprite {
             position: absolute;
-            width: 24px; height: 24px;
-            border: 3px solid #94a3b8; border-radius: 50%;
-            bottom: 0;
+            inset: 0;
+            image-rendering: pixelated;
+            background-image: url('__SPRITE_URL__');
+            background-repeat: no-repeat;
+            background-size: 300% 100%;
+            background-position: 0% 0;
+            filter: drop-shadow(0 2px 2px rgba(2, 6, 23, 0.45));
           }
-          .ve-wheel::after {
-            content: "";
-            position: absolute;
-            left: 9px; top: -3px;
-            width: 2px; height: 24px;
-            background: #e2e8f0;
-            transform: rotate(var(--ve-pedal-rot));
-            transform-origin: center 15px;
-          }
-          .ve-wheel-a { left: 24px; }
-          .ve-wheel-b { left: 78px; }
           .ve-hud {
             position: absolute;
             right: 10px;
@@ -398,12 +374,14 @@ def run_web_ui(
             if (!scene) return;
             const speedNode = document.getElementById('ve-scene-speed');
             const actionNode = document.getElementById('ve-scene-action');
+            const spriteNode = document.getElementById('ve-sprite');
             const state = window.__velox_scene_state || {
               road: 0,
               mountain: 0,
               cloud: 0,
               pedal: 0,
               bobTick: 0,
+              frameTick: 0,
             };
             const s = Math.max(0, Number(speed || 0));
             const c = Math.max(0, Number(cadence || 0));
@@ -412,6 +390,7 @@ def run_web_ui(
             state.cloud = (state.cloud - Math.max(0.1, s * 0.22)) % 600;
             state.pedal = (state.pedal + (c * 0.92)) % 360;
             state.bobTick += 0.35;
+            state.frameTick += Math.max(0.25, c / 65);
             const bob = Math.sin(state.bobTick + c / 20) * Math.min(2.5, 0.6 + c / 65);
             scene.style.setProperty('--ve-road-offset', `${state.road}px`);
             scene.style.setProperty('--ve-mtn-offset', `${state.mountain}px`);
@@ -420,6 +399,11 @@ def run_web_ui(
             scene.style.setProperty('--ve-rider-bob', `${bob}px`);
             scene.dataset.zone = inZone ? 'ok' : 'bad';
             scene.dataset.action = action || 'steady';
+            if (spriteNode) {
+              const frame = Math.floor(state.frameTick) % 3;
+              const x = frame * 50;
+              spriteNode.style.backgroundPosition = `${x}% 0%`;
+            }
             if (speedNode) speedNode.textContent = `${s.toFixed(1)} km/h`;
             if (actionNode) {
               if (action === 'up') actionNode.textContent = 'PUSH';
@@ -429,7 +413,7 @@ def run_web_ui(
             window.__velox_scene_state = state;
           };
         </script>
-        """
+        """.replace("__SPRITE_URL__", SPRITE_URL)
     )
 
     templates = list_templates()
@@ -600,15 +584,7 @@ def run_web_ui(
                     <span id="ve-scene-speed" class="ve-hud-speed">0,0 km/h</span>
                   </div>
                   <div class="ve-rider">
-                    <div class="ve-helmet"></div>
-                    <div class="ve-head"></div>
-                    <div class="ve-body"></div>
-                    <div class="ve-jersey"></div>
-                    <div class="ve-frame"></div>
-                    <div class="ve-seat"></div>
-                    <div class="ve-handle"></div>
-                    <div class="ve-wheel ve-wheel-a"></div>
-                    <div class="ve-wheel ve-wheel-b"></div>
+                    <div id="ve-sprite" class="ve-sprite"></div>
                   </div>
                 </div>
                 """
