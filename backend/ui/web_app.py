@@ -43,7 +43,7 @@ TIMELINE_SAMPLE_SEC = 2
 ACTION_SWITCH_MIN_SEC = 2.0
 ASSETS_ROUTE = "/velox-assets"
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
-SPRITE_URL = f"{ASSETS_ROUTE}/cyclist_sprite.png"
+SPRITE_URL = f"{ASSETS_ROUTE}/cyclist_sprite_aligned.png"
 SCENE_BG_URL = f"{ASSETS_ROUTE}/forest_bg.png"
 _ASSETS_MOUNTED = False
 
@@ -355,7 +355,7 @@ def run_web_ui(
             if (spriteNode) {
               const frame = Math.floor(state.frameTick) % 3;
               const x = frame * 50;
-              const shiftByFrame = [0, -1.5, -0.5];
+              const shiftByFrame = [0, 0, 0];
               spriteNode.style.backgroundPosition = `${x}% 0%`;
               scene.style.setProperty('--ve-sprite-shift-x', `${shiftByFrame[frame]}px`);
             }
