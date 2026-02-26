@@ -242,31 +242,59 @@ def run_web_ui(
           .ve-scene {
             position: relative;
             width: 100%;
-            height: 120px;
+            height: 132px;
             border: 1px solid rgba(56, 189, 248, 0.35);
             border-radius: 12px;
             overflow: hidden;
-            background: linear-gradient(180deg, #09204a 0%, #133368 58%, #0a1b35 100%);
+            background: linear-gradient(180deg, #071a43 0%, #0d2c67 52%, #0a1b35 100%);
             --ve-road-offset: 0px;
+            --ve-mtn-offset: 0px;
+            --ve-cloud-offset: 0px;
             --ve-pedal-rot: 0deg;
+            --ve-rider-bob: 0px;
           }
           .ve-scene[data-zone="ok"] { box-shadow: inset 0 0 0 2px rgba(34,197,94,.25); }
           .ve-scene[data-zone="bad"] { box-shadow: inset 0 0 0 2px rgba(239,68,68,.25); }
+          .ve-scene[data-action="up"] .ve-hud-action { color: #f59e0b; }
+          .ve-scene[data-action="down"] .ve-hud-action { color: #ef4444; }
+          .ve-scene[data-action="steady"] .ve-hud-action { color: #22c55e; }
+          .ve-clouds {
+            position: absolute;
+            inset: 8px 0 auto 0;
+            height: 24px;
+            opacity: 0.9;
+            background-image:
+              radial-gradient(circle at 16px 10px, rgba(226,232,240,.65) 0 8px, transparent 9px),
+              radial-gradient(circle at 52px 12px, rgba(226,232,240,.5) 0 10px, transparent 11px),
+              radial-gradient(circle at 120px 8px, rgba(226,232,240,.55) 0 8px, transparent 9px),
+              radial-gradient(circle at 156px 14px, rgba(226,232,240,.45) 0 9px, transparent 10px);
+            background-size: 210px 24px;
+            background-position-x: var(--ve-cloud-offset);
+          }
           .ve-mountains {
             position: absolute;
-            inset: 20px 0 40px 0;
+            inset: 26px 0 42px 0;
             background-image:
               linear-gradient(135deg, transparent 38%, rgba(148,163,184,.4) 39%, transparent 41%),
               linear-gradient(45deg, transparent 38%, rgba(56,189,248,.3) 39%, transparent 41%);
             background-size: 120px 45px, 160px 60px;
-            background-position:
-              calc(var(--ve-road-offset) * .25) 0,
-              calc(var(--ve-road-offset) * .15) 6px;
+            background-position-x: var(--ve-mtn-offset), calc(var(--ve-mtn-offset) * 0.66);
+          }
+          .ve-trees {
+            position: absolute;
+            left: 0; right: 0; bottom: 30px; height: 26px;
+            background-image:
+              linear-gradient(160deg, transparent 43%, rgba(16,185,129,.45) 44%, transparent 45%),
+              linear-gradient(20deg, transparent 43%, rgba(16,185,129,.35) 44%, transparent 45%);
+            background-size: 52px 24px, 72px 24px;
+            background-position-x:
+              calc(var(--ve-road-offset) * .48),
+              calc(var(--ve-road-offset) * .38);
           }
           .ve-road {
             position: absolute;
             left: 0; right: 0; bottom: 0;
-            height: 38px;
+            height: 32px;
             background:
               repeating-linear-gradient(
                 90deg,
@@ -275,55 +303,127 @@ def run_web_ui(
               );
             background-position-x: var(--ve-road-offset);
           }
+          .ve-road::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 9px;
+            height: 2px;
+            background:
+              repeating-linear-gradient(
+                90deg,
+                rgba(226,232,240,.5) 0 14px,
+                transparent 14px 32px
+              );
+          }
           .ve-rider {
             position: absolute;
-            left: 88px;
-            bottom: 18px;
-            width: 110px;
-            height: 70px;
+            left: 70px;
+            bottom: 16px;
+            width: 120px;
+            height: 78px;
+            transform: translateY(var(--ve-rider-bob));
           }
           .ve-body {
-            position: absolute; left: 44px; top: 18px;
-            width: 22px; height: 18px; background: #fde68a;
+            position: absolute; left: 49px; top: 22px;
+            width: 24px; height: 20px; background: #f8fafc;
+            border: 1px solid rgba(30,41,59,.6);
+          }
+          .ve-jersey {
+            position: absolute; left: 49px; top: 29px;
+            width: 24px; height: 12px; background: #22d3ee;
           }
           .ve-head {
-            position: absolute; left: 48px; top: 6px;
-            width: 14px; height: 14px; background: #fef3c7; border-radius: 2px;
+            position: absolute; left: 54px; top: 10px;
+            width: 14px; height: 14px; background: #fef3c7; border-radius: 3px;
+            border: 1px solid rgba(30,41,59,.55);
+          }
+          .ve-helmet {
+            position: absolute; left: 52px; top: 7px;
+            width: 18px; height: 7px; background: #0ea5e9; border-radius: 3px 3px 0 0;
           }
           .ve-frame {
-            position: absolute; left: 26px; top: 34px;
+            position: absolute; left: 30px; top: 44px;
             width: 56px; height: 4px; background: #22d3ee;
+          }
+          .ve-seat {
+            position: absolute; left: 57px; top: 38px;
+            width: 13px; height: 4px; background: #111827;
+          }
+          .ve-handle {
+            position: absolute; left: 84px; top: 38px;
+            width: 10px; height: 3px; background: #e2e8f0;
           }
           .ve-wheel {
             position: absolute;
-            width: 22px; height: 22px;
+            width: 24px; height: 24px;
             border: 3px solid #94a3b8; border-radius: 50%;
             bottom: 0;
           }
           .ve-wheel::after {
             content: "";
             position: absolute;
-            left: 8px; top: -3px;
-            width: 2px; height: 22px;
+            left: 9px; top: -3px;
+            width: 2px; height: 24px;
             background: #e2e8f0;
             transform: rotate(var(--ve-pedal-rot));
-            transform-origin: center 14px;
+            transform-origin: center 15px;
           }
-          .ve-wheel-a { left: 20px; }
-          .ve-wheel-b { left: 74px; }
+          .ve-wheel-a { left: 24px; }
+          .ve-wheel-b { left: 78px; }
+          .ve-hud {
+            position: absolute;
+            right: 10px;
+            top: 8px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: .02em;
+            background: rgba(2, 6, 23, 0.45);
+            border: 1px solid rgba(56,189,248,.35);
+            border-radius: 8px;
+            padding: 3px 7px;
+            color: #e2e8f0;
+          }
+          .ve-hud-speed { color: #7dd3fc; }
         </style>
         <script>
-          window.veloxUpdateScene = function(speed, cadence, inZone) {
+          window.veloxUpdateScene = function(speed, cadence, inZone, action) {
             const scene = document.getElementById('ve-scene');
             if (!scene) return;
-            const state = window.__velox_scene_state || {road: 0, pedal: 0};
+            const speedNode = document.getElementById('ve-scene-speed');
+            const actionNode = document.getElementById('ve-scene-action');
+            const state = window.__velox_scene_state || {
+              road: 0,
+              mountain: 0,
+              cloud: 0,
+              pedal: 0,
+              bobTick: 0,
+            };
             const s = Math.max(0, Number(speed || 0));
             const c = Math.max(0, Number(cadence || 0));
-            state.road = (state.road - (s * 1.8)) % 880;
-            state.pedal = (state.pedal + (c * 0.85)) % 360;
+            state.road = (state.road - (s * 1.9)) % 880;
+            state.mountain = (state.mountain - Math.max(0.2, s * 0.35)) % 880;
+            state.cloud = (state.cloud - Math.max(0.1, s * 0.22)) % 600;
+            state.pedal = (state.pedal + (c * 0.92)) % 360;
+            state.bobTick += 0.35;
+            const bob = Math.sin(state.bobTick + c / 20) * Math.min(2.5, 0.6 + c / 65);
             scene.style.setProperty('--ve-road-offset', `${state.road}px`);
+            scene.style.setProperty('--ve-mtn-offset', `${state.mountain}px`);
+            scene.style.setProperty('--ve-cloud-offset', `${state.cloud}px`);
             scene.style.setProperty('--ve-pedal-rot', `${state.pedal}deg`);
+            scene.style.setProperty('--ve-rider-bob', `${bob}px`);
             scene.dataset.zone = inZone ? 'ok' : 'bad';
+            scene.dataset.action = action || 'steady';
+            if (speedNode) speedNode.textContent = `${s.toFixed(1)} km/h`;
+            if (actionNode) {
+              if (action === 'up') actionNode.textContent = 'PUSH';
+              else if (action === 'down') actionNode.textContent = 'EASE';
+              else actionNode.textContent = 'HOLD';
+            }
             window.__velox_scene_state = state;
           };
         </script>
@@ -489,12 +589,22 @@ def run_web_ui(
             ui.html(
                 """
                 <div id="ve-scene" class="ve-scene" data-zone="ok">
+                  <div class="ve-clouds"></div>
                   <div class="ve-mountains"></div>
+                  <div class="ve-trees"></div>
                   <div class="ve-road"></div>
+                  <div class="ve-hud">
+                    <span id="ve-scene-action" class="ve-hud-action">HOLD</span>
+                    <span id="ve-scene-speed" class="ve-hud-speed">0,0 km/h</span>
+                  </div>
                   <div class="ve-rider">
+                    <div class="ve-helmet"></div>
                     <div class="ve-head"></div>
                     <div class="ve-body"></div>
+                    <div class="ve-jersey"></div>
                     <div class="ve-frame"></div>
+                    <div class="ve-seat"></div>
+                    <div class="ve-handle"></div>
                     <div class="ve-wheel ve-wheel-a"></div>
                     <div class="ve-wheel ve-wheel-b"></div>
                   </div>
@@ -1118,13 +1228,7 @@ def run_web_ui(
         kpi_speed.style("color: #22d3ee;")
         kpi_distance.style("color: #ffffff;")
         in_zone_for_scene = power_in_zone is True and cadence_in_zone is True
-        _safe_run_js(
-            "window.veloxUpdateScene("
-            f"{state.speed if state.speed is not None else 0},"
-            f"{state.cadence if state.cadence is not None else 0},"
-            f"{'true' if in_zone_for_scene else 'false'}"
-            ");"
-        )
+        scene_action = "steady"
 
         if state.progress is not None:
             raw_signal = compute_coaching_signal(
@@ -1138,6 +1242,10 @@ def run_web_ui(
             stable_signal, changed = coaching_stabilizer.update(raw_signal, time.monotonic())
             guidance_label.text = stable_signal.text
             guidance_label.style(f"color: {stable_signal.color}; font-weight: 700;")
+            if stable_signal.key in {"power_low", "cadence_low", "dual_pl_cl", "dual_ph_cl"}:
+                scene_action = "up"
+            elif stable_signal.key in {"power_high", "cadence_high", "dual_pl_ch", "dual_ph_ch"}:
+                scene_action = "down"
             if (
                 changed
                 and sound_alerts
@@ -1161,6 +1269,14 @@ def run_web_ui(
                     """
                 )
             last_coaching_alert_key = stable_signal.key
+        _safe_run_js(
+            "window.veloxUpdateScene("
+            f"{state.speed if state.speed is not None else 0},"
+            f"{state.cadence if state.cadence is not None else 0},"
+            f"{'true' if in_zone_for_scene else 'false'},"
+            f"'{scene_action}'"
+            ");"
+        )
 
         p = pct(zone_compliance["power_ok"], zone_compliance["power_total"])
         r = pct(zone_compliance["rpm_ok"], zone_compliance["rpm_total"])
