@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "velox-engine"
+version = "0.1.0"
+description = "Terminal-only FTMS MVP for Elite Direto XRT"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+packages = ["backend"]
+
+[tool.flake8]
+max-line-length = 100
+exclude = [".venv", "__pycache__"]

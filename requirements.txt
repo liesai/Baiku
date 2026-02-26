@@ -1,0 +1,5 @@
+bleak==0.22.3
+pytest==8.3.4
+mypy==1.11.2
+flake8==7.1.1
+nicegui>=2.0,<3.0
