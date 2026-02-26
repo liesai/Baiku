@@ -263,9 +263,7 @@ def run_web_ui(
             border-radius: 12px;
             overflow: hidden;
             background: linear-gradient(180deg, #0a2a4e 0%, #15426d 58%, #0f2f52 100%);
-            --ve-bg-far-offset: 0px;
-            --ve-bg-mid-offset: 0px;
-            --ve-bg-near-offset: 0px;
+            --ve-bg-offset: 0px;
             --ve-pedal-rot: 0deg;
             --ve-rider-bob: 0px;
             --ve-sprite-shift-x: 0px;
@@ -286,50 +284,10 @@ def run_web_ui(
             background-size: auto 100%;
             image-rendering: pixelated;
           }
-          .ve-bg-far {
-            opacity: 0.6;
-            transform: scale(1.08);
-            background-position-x: var(--ve-bg-far-offset);
-            filter: blur(0.2px) saturate(0.9);
-          }
-          .ve-bg-mid {
-            opacity: 0.8;
-            transform: scale(1.03);
-            background-position-x: var(--ve-bg-mid-offset);
-            filter: saturate(1.0);
-          }
-          .ve-bg-near {
-            opacity: 0.97;
-            background-position-x: var(--ve-bg-near-offset);
-            filter: saturate(1.08) contrast(1.03);
-          }
-          .ve-road {
-            position: absolute;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            height: 30px;
-            background:
-              repeating-linear-gradient(
-                90deg,
-                rgba(2,6,23,.45) 0 22px,
-                rgba(15,23,42,.85) 22px 44px
-              );
-            background-position-x: var(--ve-bg-near-offset);
-          }
-          .ve-road::before {
-            content: "";
-            position: absolute;
-            left: 0;
-            right: 0;
-            top: 9px;
-            height: 2px;
-            background:
-              repeating-linear-gradient(
-                90deg,
-                rgba(226,232,240,.5) 0 14px,
-                transparent 14px 32px
-              );
+          .ve-bg-main {
+            opacity: 1;
+            background-position-x: var(--ve-bg-offset);
+            filter: saturate(1.05) contrast(1.02);
           }
           .ve-rider {
             position: absolute;
@@ -377,25 +335,19 @@ def run_web_ui(
             const actionNode = document.getElementById('ve-scene-action');
             const spriteNode = document.getElementById('ve-sprite');
             const state = window.__velox_scene_state || {
-              road: 0,
-              mountain: 0,
-              cloud: 0,
+              bg: 0,
               pedal: 0,
               bobTick: 0,
               frameTick: 0,
             };
             const s = Math.max(0, Number(speed || 0));
             const c = Math.max(0, Number(cadence || 0));
-            state.cloud = (state.cloud - Math.max(0.1, s * 0.12)) % 900;
-            state.mountain = (state.mountain - Math.max(0.2, s * 0.24)) % 900;
-            state.road = (state.road - (s * 0.65)) % 900;
+            state.bg = (state.bg - Math.max(0.15, s * 0.25)) % 900;
             state.pedal = (state.pedal + (c * 0.92)) % 360;
             state.bobTick += 0.35;
             state.frameTick += Math.max(0.25, c / 65);
             const bob = Math.sin(state.bobTick + c / 20) * Math.min(2.5, 0.6 + c / 65);
-            scene.style.setProperty('--ve-bg-far-offset', `${state.cloud}px`);
-            scene.style.setProperty('--ve-bg-mid-offset', `${state.mountain}px`);
-            scene.style.setProperty('--ve-bg-near-offset', `${state.road}px`);
+            scene.style.setProperty('--ve-bg-offset', `${state.bg}px`);
             scene.style.setProperty('--ve-pedal-rot', `${state.pedal}deg`);
             scene.style.setProperty('--ve-rider-bob', `${bob}px`);
             scene.dataset.zone = inZone ? 'ok' : 'bad';
@@ -580,10 +532,7 @@ def run_web_ui(
             ui.html(
                 """
                 <div id="ve-scene" class="ve-scene" data-zone="ok">
-                  <div class="ve-bg ve-bg-far"></div>
-                  <div class="ve-bg ve-bg-mid"></div>
-                  <div class="ve-bg ve-bg-near"></div>
-                  <div class="ve-road"></div>
+                  <div class="ve-bg ve-bg-main"></div>
                   <div class="ve-hud">
                     <span id="ve-scene-action" class="ve-hud-action">HOLD</span>
                     <span id="ve-scene-speed" class="ve-hud-speed">0,0 km/h</span>
