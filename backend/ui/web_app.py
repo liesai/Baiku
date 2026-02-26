@@ -813,14 +813,21 @@ def run_web_ui(
         if core.loop is None:
             # NiceGUI loop/client not ready yet during initial startup.
             return
-        ui.run_javascript(
-            (
-                "document.body.classList.remove("
-                "'gb-layout-auto','gb-layout-1080','gb-layout-1440'"
-                ");"
-                f"document.body.classList.add('{cls}');"
-            )
+        _safe_run_js(
+            "document.body.classList.remove("
+            "'gb-layout-auto','gb-layout-1080','gb-layout-1440'"
+            ");"
+            f"document.body.classList.add('{cls}');"
         )
+
+    def _safe_run_js(code: str) -> None:
+        """Best-effort JS execution; skip when timer/background has no slot/client context."""
+        if core.loop is None:
+            return
+        try:
+            ui.run_javascript(code)
+        except (AssertionError, RuntimeError):
+            return
 
     def show_setup_screen() -> None:
         setup_header.set_visibility(True)
@@ -1111,17 +1118,13 @@ def run_web_ui(
         kpi_speed.style("color: #22d3ee;")
         kpi_distance.style("color: #ffffff;")
         in_zone_for_scene = power_in_zone is True and cadence_in_zone is True
-        if core.loop is not None:
-            try:
-                ui.run_javascript(
-                    "window.veloxUpdateScene("
-                    f"{state.speed if state.speed is not None else 0},"
-                    f"{state.cadence if state.cadence is not None else 0},"
-                    f"{'true' if in_zone_for_scene else 'false'}"
-                    ");"
-                )
-            except AssertionError:
-                pass
+        _safe_run_js(
+            "window.veloxUpdateScene("
+            f"{state.speed if state.speed is not None else 0},"
+            f"{state.cadence if state.cadence is not None else 0},"
+            f"{'true' if in_zone_for_scene else 'false'}"
+            ");"
+        )
 
         if state.progress is not None:
             raw_signal = compute_coaching_signal(
@@ -1141,7 +1144,7 @@ def run_web_ui(
                 and stable_signal.severity in {"warn", "bad"}
                 and stable_signal.key != last_coaching_alert_key
             ):
-                ui.run_javascript(
+                _safe_run_js(
                     """
                     (() => {
                       const ctx = new (window.AudioContext || window.webkitAudioContext)();
