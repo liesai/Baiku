@@ -14,6 +14,7 @@ from nicegui import core, ui
 from backend.ble.ftms_client import IndoorBikeData, ScannedDevice
 from backend.ui.coaching import ActionStabilizer, compute_coaching_signal
 from backend.ui.controller import UIController
+from backend.ui.game_layer import DEFAULT_GAME_GOALS, GoalTracker
 from backend.workout.library import build_plan_from_template, list_templates
 from backend.workout.model import WorkoutPlan, WorkoutStep
 from backend.workout.runner import TargetMode, WorkoutProgress
@@ -176,6 +177,11 @@ def run_web_ui(
             color: var(--gb-text);
             font-family: Arial, "Segoe UI", sans-serif;
           }
+          .gb-pixel {
+            font-family: "Courier New", monospace;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+          }
           body.gb-layout-1080 {
             height: 100vh;
             overflow: hidden;
@@ -233,7 +239,94 @@ def run_web_ui(
             background: #0f1b35 !important;
             color: #e2e8f0 !important;
           }
+          .ve-scene {
+            position: relative;
+            width: 100%;
+            height: 120px;
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            border-radius: 12px;
+            overflow: hidden;
+            background: linear-gradient(180deg, #09204a 0%, #133368 58%, #0a1b35 100%);
+            --ve-road-offset: 0px;
+            --ve-pedal-rot: 0deg;
+          }
+          .ve-scene[data-zone="ok"] { box-shadow: inset 0 0 0 2px rgba(34,197,94,.25); }
+          .ve-scene[data-zone="bad"] { box-shadow: inset 0 0 0 2px rgba(239,68,68,.25); }
+          .ve-mountains {
+            position: absolute;
+            inset: 20px 0 40px 0;
+            background-image:
+              linear-gradient(135deg, transparent 38%, rgba(148,163,184,.4) 39%, transparent 41%),
+              linear-gradient(45deg, transparent 38%, rgba(56,189,248,.3) 39%, transparent 41%);
+            background-size: 120px 45px, 160px 60px;
+            background-position:
+              calc(var(--ve-road-offset) * .25) 0,
+              calc(var(--ve-road-offset) * .15) 6px;
+          }
+          .ve-road {
+            position: absolute;
+            left: 0; right: 0; bottom: 0;
+            height: 38px;
+            background:
+              repeating-linear-gradient(
+                90deg,
+                rgba(2,6,23,.45) 0 22px,
+                rgba(15,23,42,.85) 22px 44px
+              );
+            background-position-x: var(--ve-road-offset);
+          }
+          .ve-rider {
+            position: absolute;
+            left: 88px;
+            bottom: 18px;
+            width: 110px;
+            height: 70px;
+          }
+          .ve-body {
+            position: absolute; left: 44px; top: 18px;
+            width: 22px; height: 18px; background: #fde68a;
+          }
+          .ve-head {
+            position: absolute; left: 48px; top: 6px;
+            width: 14px; height: 14px; background: #fef3c7; border-radius: 2px;
+          }
+          .ve-frame {
+            position: absolute; left: 26px; top: 34px;
+            width: 56px; height: 4px; background: #22d3ee;
+          }
+          .ve-wheel {
+            position: absolute;
+            width: 22px; height: 22px;
+            border: 3px solid #94a3b8; border-radius: 50%;
+            bottom: 0;
+          }
+          .ve-wheel::after {
+            content: "";
+            position: absolute;
+            left: 8px; top: -3px;
+            width: 2px; height: 22px;
+            background: #e2e8f0;
+            transform: rotate(var(--ve-pedal-rot));
+            transform-origin: center 14px;
+          }
+          .ve-wheel-a { left: 20px; }
+          .ve-wheel-b { left: 74px; }
         </style>
+        <script>
+          window.veloxUpdateScene = function(speed, cadence, inZone) {
+            const scene = document.getElementById('ve-scene');
+            if (!scene) return;
+            const state = window.__velox_scene_state || {road: 0, pedal: 0};
+            const s = Math.max(0, Number(speed || 0));
+            const c = Math.max(0, Number(cadence || 0));
+            state.road = (state.road - (s * 1.8)) % 880;
+            state.pedal = (state.pedal + (c * 0.85)) % 360;
+            scene.style.setProperty('--ve-road-offset', `${state.road}px`);
+            scene.style.setProperty('--ve-pedal-rot', `${state.pedal}deg`);
+            scene.dataset.zone = inZone ? 'ok' : 'bad';
+            window.__velox_scene_state = state;
+          };
+        </script>
         """
     )
 
@@ -254,6 +347,8 @@ def run_web_ui(
     sound_alerts = True
     coaching_stabilizer = ActionStabilizer(min_switch_sec=ACTION_SWITCH_MIN_SEC)
     last_coaching_alert_key: str | None = None
+    goal_tracker = GoalTracker(DEFAULT_GAME_GOALS)
+    last_goal_tick_ts: float | None = None
 
     timeline_labels: list[str] = []
     timeline_expected_power: list[int] = []
@@ -383,6 +478,29 @@ def run_web_ui(
             with ui.card().classes("w-full gb-kpi gb-compact"):
                 ui.label("Distance").classes("text-xs gb-title-neutral")
                 kpi_distance = ui.label("0,00 km").classes("gb-number")
+
+        with ui.card().classes("w-full gb-card gb-compact"):
+            with ui.row().classes("w-full items-center justify-between gap-3 flex-wrap"):
+                game_score_label = ui.label("Score: 0").classes("text-sm gb-pixel")
+                game_coins_label = ui.label("Coins: 0").classes("text-sm gb-pixel")
+                game_streak_label = ui.label("Streak: 0").classes("text-sm gb-pixel")
+                game_goal_label = ui.label("Goal: -").classes("text-xs gb-pixel")
+                game_goal_progress_label = ui.label("0/0 s").classes("text-xs gb-pixel")
+            ui.html(
+                """
+                <div id="ve-scene" class="ve-scene" data-zone="ok">
+                  <div class="ve-mountains"></div>
+                  <div class="ve-road"></div>
+                  <div class="ve-rider">
+                    <div class="ve-head"></div>
+                    <div class="ve-body"></div>
+                    <div class="ve-frame"></div>
+                    <div class="ve-wheel ve-wheel-a"></div>
+                    <div class="ve-wheel ve-wheel-b"></div>
+                  </div>
+                </div>
+                """
+            )
 
         with ui.card().classes("w-full gb-card gb-compact"):
             live_chart = ui.echart(
@@ -915,6 +1033,18 @@ def run_web_ui(
             course_info.text = f"{state.workout.name} | total {total} | mode {state.mode.upper()}"
         else:
             course_info.text = "No course loaded"
+        game_score_label.text = f"Score: {goal_tracker.score}"
+        game_coins_label.text = f"Coins: {goal_tracker.coins}"
+        game_streak_label.text = f"Streak: {goal_tracker.streak}"
+        current_goal = goal_tracker.current_goal
+        if current_goal is None:
+            game_goal_label.text = "Goal: session clear"
+            game_goal_progress_label.text = "--"
+        else:
+            game_goal_label.text = f"Goal: {current_goal.definition.title}"
+            game_goal_progress_label.text = (
+                f"{int(current_goal.progress_sec)}/{int(current_goal.definition.target_sec)} s"
+            )
 
         expected_power_min = None
         expected_power_max = None
@@ -980,6 +1110,18 @@ def run_web_ui(
         kpi_cadence.style(f"color: {cadence_color};")
         kpi_speed.style("color: #22d3ee;")
         kpi_distance.style("color: #ffffff;")
+        in_zone_for_scene = power_in_zone is True and cadence_in_zone is True
+        if core.loop is not None:
+            try:
+                ui.run_javascript(
+                    "window.veloxUpdateScene("
+                    f"{state.speed if state.speed is not None else 0},"
+                    f"{state.cadence if state.cadence is not None else 0},"
+                    f"{'true' if in_zone_for_scene else 'false'}"
+                    ");"
+                )
+            except AssertionError:
+                pass
 
         if state.progress is not None:
             raw_signal = compute_coaching_signal(
@@ -1113,6 +1255,7 @@ def run_web_ui(
         timeline_actual_cadence.append(None)
 
     def on_metrics(metrics: IndoorBikeData) -> None:
+        nonlocal last_goal_tick_ts
         now = asyncio.get_event_loop().time()
         if state.last_ts is not None and metrics.instantaneous_speed_kmh is not None:
             state.distance_km += (
@@ -1131,6 +1274,8 @@ def run_web_ui(
         )
 
         if state.progress:
+            power_zone_ok: bool | None = None
+            cadence_zone_ok: bool | None = None
             if (
                 metrics.instantaneous_power is not None
                 and state.progress.expected_power_min_watts is not None
@@ -1143,6 +1288,9 @@ def run_web_ui(
                     <= state.progress.expected_power_max_watts
                 ):
                     zone_compliance["power_ok"] += 1
+                    power_zone_ok = True
+                else:
+                    power_zone_ok = False
 
             if (
                 metrics.instantaneous_cadence is not None
@@ -1156,6 +1304,9 @@ def run_web_ui(
                     <= state.progress.expected_cadence_max_rpm
                 ):
                     zone_compliance["rpm_ok"] += 1
+                    cadence_zone_ok = True
+                else:
+                    cadence_zone_ok = False
 
             if timeline_labels:
                 idx = min(
@@ -1166,6 +1317,15 @@ def run_web_ui(
                     timeline_actual_power[idx] = metrics.instantaneous_power
                 if metrics.instantaneous_cadence is not None:
                     timeline_actual_cadence[idx] = metrics.instantaneous_cadence
+            dt_goal = 0.8
+            if last_goal_tick_ts is not None:
+                dt_goal = max(0.1, min(2.0, now - last_goal_tick_ts))
+            last_goal_tick_ts = now
+            goal_tracker.update(
+                power_in_zone=power_zone_ok,
+                cadence_in_zone=cadence_zone_ok,
+                dt_sec=dt_goal,
+            )
 
     def on_progress(progress: WorkoutProgress) -> None:
         state.progress = progress
@@ -1178,7 +1338,10 @@ def run_web_ui(
         refresh_ui()
 
     async def on_start() -> None:
-        nonlocal session_started_at_utc, current_snapshot_path, current_snapshot_csv_path
+        nonlocal session_started_at_utc
+        nonlocal current_snapshot_path
+        nonlocal current_snapshot_csv_path
+        nonlocal last_goal_tick_ts
         if state.workout is None:
             return
         zone_compliance["power_ok"] = 0
@@ -1190,6 +1353,8 @@ def run_web_ui(
         state.last_ts = None
         metric_samples.clear()
         coaching_stabilizer.reset()
+        goal_tracker.reset()
+        last_goal_tick_ts = None
         session_started_at_utc = now_utc_iso()
         current_snapshot_path = None
         current_snapshot_csv_path = None
