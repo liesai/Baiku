@@ -221,6 +221,7 @@ def run_web_ui(
             text-shadow: 0 0 10px rgba(250, 204, 21, 0.6);
           }
           .dmd-shell {
+            position: relative;
             border: 1px solid rgba(250, 204, 21, 0.35);
             border-radius: 12px;
             background: linear-gradient(180deg, #190e06 0%, #100702 100%);
@@ -230,7 +231,22 @@ def run_web_ui(
               inset 0 0 30px rgba(255, 120, 0, 0.14),
               0 8px 18px rgba(2, 6, 23, 0.42);
           }
+          .dmd-bg {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 220px;
+            height: 88px;
+            object-fit: cover;
+            transform: translate(-50%, -50%);
+            opacity: 0.14;
+            pointer-events: none;
+            image-rendering: pixelated;
+            filter: saturate(0.95) contrast(1.02);
+          }
           .dmd-screen {
+            position: relative;
+            z-index: 2;
             width: 100%;
             height: 88px;
             border-radius: 8px;
@@ -539,8 +555,6 @@ def run_web_ui(
             let flash = '';
             let flashKind = 'bonus';
             let flashUntil = 0;
-            const cyclist = new Image();
-            cyclist.src = '__DMD_CYCLIST_URL__';
             const off = document.createElement('canvas');
             off.width = 192;
             off.height = 64;
@@ -590,11 +604,6 @@ def run_web_ui(
               const colorset = colors(kind);
               octx.fillStyle = '#000';
               octx.fillRect(0, 0, off.width, off.height);
-              if (cyclist.complete) {
-                octx.globalAlpha = flashUntil > now ? 0.24 : 0.12;
-                octx.drawImage(cyclist, 44, 8, 104, 48);
-                octx.globalAlpha = 1;
-              }
               octx.fillStyle = '#fff';
               octx.font = 'bold 22px monospace';
               octx.textAlign = 'center';
@@ -603,7 +612,11 @@ def run_web_ui(
               octx.fillText(msg || 'VELOX READY', 96, 22);
               octx.font = 'bold 12px monospace';
               octx.fillText('TRACK  •  COMPETE  •  WIN', 96, 46);
-              drawDotGrid(colorset[0], colorset[1], colorset[2]);
+              try {
+                drawDotGrid(colorset[0], colorset[1], colorset[2]);
+              } catch (e) {
+                // Keep render loop alive even if one frame fails.
+              }
               requestAnimationFrame(render);
             }
 
@@ -772,9 +785,11 @@ def run_web_ui(
         pinball_dmd = ui.html(
             """
             <div class="dmd-shell">
+              <img class="dmd-bg" src="__DMD_CYCLIST_URL__" alt="dmd cyclist" />
               <canvas id="ve-dmd" class="dmd-screen"></canvas>
             </div>
             """
+            .replace("__DMD_CYCLIST_URL__", DMD_CYCLIST_URL)
         ).classes("w-full")
         pinball_dmd.set_visibility(pinball_mode)
 
