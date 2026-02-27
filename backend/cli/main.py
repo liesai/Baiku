@@ -69,6 +69,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Simulate a home trainer (no BLE required) for debug/testing",
     )
+    parser.add_argument(
+        "--ble-pair",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Request OS-level BLE pairing/bonding during connect (default: enabled)",
+    )
     return parser
 
 
@@ -82,7 +88,11 @@ async def run_scan(simulate_ht: bool = False) -> int:
 
     for device in devices:
         ftms_flag = "FTMS" if device.has_ftms else "-"
-        print(f"{device.name:<24} {device.address} RSSI={device.rssi:>4} [{ftms_flag}]")
+        manufacturer = f" | {device.manufacturer}" if device.manufacturer else ""
+        print(
+            f"{device.name:<24} {device.address} RSSI={device.rssi:>4} "
+            f"[{ftms_flag}]{manufacturer}"
+        )
     return 0
 
 
@@ -91,11 +101,13 @@ async def run_connect(
     erg_watts: int | None,
     debug_ftms: bool,
     simulate_ht: bool,
+    ble_pair: bool,
     startup_wait: float,
 ) -> int:
     engine = VeloxEngine(
         debug_ftms=debug_ftms,
         simulate_ht=simulate_ht,
+        ble_pair=ble_pair,
         startup_wait_seconds=startup_wait,
     )
 
@@ -113,12 +125,13 @@ def main() -> int:
     if args.ui:
         from backend.ui.app import run_ui
 
-        return run_ui(simulate_ht=args.debug_sim_ht)
+        return run_ui(simulate_ht=args.debug_sim_ht, ble_pair=args.ble_pair)
     if args.ui_web:
         from backend.ui.web_app import run_web_ui
 
         return run_web_ui(
             simulate_ht=args.debug_sim_ht,
+            ble_pair=args.ble_pair,
             host=args.web_host,
             port=args.web_port,
             start_delay_sec=max(0, int(args.web_start_delay)),
@@ -142,6 +155,7 @@ def main() -> int:
             args.erg,
             args.debug_ftms,
             args.debug_sim_ht,
+            args.ble_pair,
             args.startup_wait,
         )
     )

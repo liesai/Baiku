@@ -137,7 +137,13 @@ class WorkoutRunner:
                 await asyncio.sleep(1.0)
 
         if last_exc is not None:
+            if target_mode == "erg":
+                # Keep workout running even if ERG write fails transiently.
+                # The next steps/attempts may succeed once the trainer is fully ready.
+                return float(step.target_watts), "W"
             raise RuntimeError(f"Unable to apply {target_mode} target") from last_exc
+        if target_mode == "erg":
+            return float(step.target_watts), "W"
         raise RuntimeError(f"Unable to apply {target_mode} target")
 
     async def _countdown_step(
