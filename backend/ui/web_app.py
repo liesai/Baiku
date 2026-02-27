@@ -163,6 +163,7 @@ def run_web_ui(
     host: str = "127.0.0.1",
     port: int = 8088,
     start_delay_sec: int = 10,
+    ui_theme: str = "classic",
 ) -> int:
     global _ASSETS_MOUNTED
     if not _ASSETS_MOUNTED:
@@ -175,6 +176,7 @@ def run_web_ui(
 
     controller = UIController(debug_ftms=False, simulate_ht=simulate_ht)
     state = WebState()
+    pinball_mode = ui_theme == "pinball"
     ui.add_head_html(
         """
         <style>
@@ -190,6 +192,32 @@ def run_web_ui(
             background: radial-gradient(circle at top, #17223f 0%, var(--gb-bg) 58%);
             color: var(--gb-text);
             font-family: Arial, "Segoe UI", sans-serif;
+          }
+          body.gb-theme-pinball {
+            background:
+              radial-gradient(circle at 20% 10%, #1d0b2e 0%, rgba(29,11,46,0) 45%),
+              radial-gradient(circle at 80% 0%, #052b45 0%, rgba(5,43,69,0) 42%),
+              linear-gradient(180deg, #090c1d 0%, #0a1631 100%);
+          }
+          body.gb-theme-pinball .gb-card {
+            border: 1px solid rgba(250, 204, 21, 0.35);
+            box-shadow:
+              0 0 0 1px rgba(244, 114, 182, 0.15),
+              0 8px 24px rgba(2, 6, 23, 0.42),
+              inset 0 0 18px rgba(56, 189, 248, 0.1);
+          }
+          .pinball-chip {
+            border: 1px solid rgba(250, 204, 21, 0.35);
+            border-radius: 10px;
+            background: rgba(15, 23, 42, 0.45);
+            padding: 4px 8px;
+            font-size: .8rem;
+            font-weight: 700;
+            color: #f8fafc;
+          }
+          .pinball-jackpot {
+            color: #facc15;
+            text-shadow: 0 0 10px rgba(250, 204, 21, 0.6);
           }
           .gb-pixel {
             font-family: "Courier New", monospace;
@@ -392,6 +420,12 @@ def run_web_ui(
     last_coaching_alert_key: str | None = None
     goal_tracker = GoalTracker(DEFAULT_GAME_GOALS)
     last_goal_tick_ts: float | None = None
+    pinball_score_bonus = 0
+    pinball_multiplier = 1
+    pinball_jackpots = 0
+    pinball_last_bonus = "READY"
+    pinball_last_step_seen = 0
+    pinball_last_jackpot_ts = 0.0
 
     timeline_labels: list[str] = []
     timeline_expected_power: list[int] = []
@@ -489,6 +523,14 @@ def run_web_ui(
                 back_btn = ui.button("Back to setup").props("outline color=white")
                 stop_btn = ui.button("Stop session").props("color=negative")
                 stop_btn.disable()
+
+        with ui.row().classes("w-full gap-2") as pinball_hud_row:
+            ui.label("MODE: PINBALL").classes("pinball-chip")
+            pinball_mission_label = ui.label("MISSION: Keep target zone").classes("pinball-chip")
+            pinball_multiplier_label = ui.label("MULTI x1").classes("pinball-chip")
+            pinball_jackpot_label = ui.label("JACKPOT 0").classes("pinball-chip pinball-jackpot")
+            pinball_reward_label = ui.label("BONUS READY").classes("pinball-chip")
+        pinball_hud_row.set_visibility(pinball_mode)
 
         with ui.row().classes("w-full gap-2"):
             with ui.card().classes("w-full gb-card gb-compact"):
@@ -852,14 +894,16 @@ def run_web_ui(
             cls = "gb-layout-1080"
         elif strict_mode and viewport_preset == "1440p":
             cls = "gb-layout-1440"
+        theme_cls = "gb-theme-pinball" if pinball_mode else "gb-theme-classic"
         if core.loop is None:
             # NiceGUI loop/client not ready yet during initial startup.
             return
         _safe_run_js(
             "document.body.classList.remove("
-            "'gb-layout-auto','gb-layout-1080','gb-layout-1440'"
+            "'gb-layout-auto','gb-layout-1080','gb-layout-1440',"
+            "'gb-theme-classic','gb-theme-pinball'"
             ");"
-            f"document.body.classList.add('{cls}');"
+            f"document.body.classList.add('{cls}','{theme_cls}');"
         )
 
     def _safe_run_js(code: str) -> None:
@@ -1082,18 +1126,33 @@ def run_web_ui(
             course_info.text = f"{state.workout.name} | total {total} | mode {state.mode.upper()}"
         else:
             course_info.text = "No course loaded"
-        game_score_label.text = f"Score: {goal_tracker.score}"
+        shown_score = (
+            goal_tracker.score + pinball_score_bonus if pinball_mode else goal_tracker.score
+        )
+        game_score_label.text = f"Score: {shown_score}"
         game_coins_label.text = f"Coins: {goal_tracker.coins}"
         game_streak_label.text = f"Streak: {goal_tracker.streak}"
         current_goal = goal_tracker.current_goal
         if current_goal is None:
             game_goal_label.text = "Goal: session clear"
             game_goal_progress_label.text = "--"
+            if pinball_mode:
+                pinball_mission_label.text = "MISSION: Clear workout"
         else:
             game_goal_label.text = f"Goal: {current_goal.definition.title}"
             game_goal_progress_label.text = (
                 f"{int(current_goal.progress_sec)}/{int(current_goal.definition.target_sec)} s"
             )
+            if pinball_mode:
+                pinball_mission_label.text = (
+                    "MISSION: "
+                    f"{current_goal.definition.title} "
+                    f"[{int(current_goal.progress_sec)}/{int(current_goal.definition.target_sec)}s]"
+                )
+        if pinball_mode:
+            pinball_multiplier_label.text = f"MULTI x{pinball_multiplier}"
+            pinball_jackpot_label.text = f"JACKPOT {pinball_jackpots}"
+            pinball_reward_label.text = f"BONUS {pinball_last_bonus}"
 
         expected_power_min = None
         expected_power_max = None
@@ -1307,6 +1366,8 @@ def run_web_ui(
 
     def on_metrics(metrics: IndoorBikeData) -> None:
         nonlocal last_goal_tick_ts
+        nonlocal pinball_score_bonus, pinball_multiplier, pinball_jackpots
+        nonlocal pinball_last_bonus, pinball_last_step_seen, pinball_last_jackpot_ts
         now = asyncio.get_event_loop().time()
         if state.last_ts is not None and metrics.instantaneous_speed_kmh is not None:
             state.distance_km += (
@@ -1377,6 +1438,34 @@ def run_web_ui(
                 cadence_in_zone=cadence_zone_ok,
                 dt_sec=dt_goal,
             )
+            if pinball_mode:
+                if pinball_last_step_seen == 0:
+                    pinball_last_step_seen = state.progress.step_index
+                elif state.progress.step_index != pinball_last_step_seen:
+                    in_zone = power_zone_ok is not False and cadence_zone_ok is not False
+                    if in_zone:
+                        reward = 100 * pinball_multiplier
+                        pinball_score_bonus += reward
+                        pinball_multiplier = min(6, pinball_multiplier + 1)
+                        pinball_last_bonus = f"+{reward} STEP CLEAR"
+                    else:
+                        pinball_last_bonus = "COMBO BREAK"
+                        pinball_multiplier = 1
+                    pinball_last_step_seen = state.progress.step_index
+
+                expected_hi = state.progress.expected_power_max_watts
+                if (
+                    expected_hi is not None
+                    and state.ftp_watts > 0
+                    and expected_hi >= int(state.ftp_watts * 0.95)
+                    and power_zone_ok is True
+                    and cadence_zone_ok is not False
+                    and (now - pinball_last_jackpot_ts) >= 6.0
+                ):
+                    pinball_jackpots += 1
+                    pinball_score_bonus += 150 * pinball_multiplier
+                    pinball_last_bonus = f"JACKPOT +{150 * pinball_multiplier}"
+                    pinball_last_jackpot_ts = now
 
     def on_progress(progress: WorkoutProgress) -> None:
         state.progress = progress
@@ -1393,6 +1482,8 @@ def run_web_ui(
         nonlocal current_snapshot_path
         nonlocal current_snapshot_csv_path
         nonlocal last_goal_tick_ts
+        nonlocal pinball_score_bonus, pinball_multiplier, pinball_jackpots
+        nonlocal pinball_last_bonus, pinball_last_step_seen, pinball_last_jackpot_ts
         if state.workout is None:
             return
         zone_compliance["power_ok"] = 0
@@ -1405,6 +1496,12 @@ def run_web_ui(
         metric_samples.clear()
         coaching_stabilizer.reset()
         goal_tracker.reset()
+        pinball_score_bonus = 0
+        pinball_multiplier = 1
+        pinball_jackpots = 0
+        pinball_last_bonus = "READY"
+        pinball_last_step_seen = 0
+        pinball_last_jackpot_ts = 0.0
         last_goal_tick_ts = None
         session_started_at_utc = now_utc_iso()
         current_snapshot_path = None
