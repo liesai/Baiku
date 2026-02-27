@@ -558,7 +558,7 @@ def run_web_ui(
             const off = document.createElement('canvas');
             off.width = 192;
             off.height = 64;
-            const octx = off.getContext('2d');
+            const octx = off.getContext('2d', { willReadFrequently: true });
 
             function colors(kind) {
               if (kind === 'jackpot') return ['#2b0900', '#ff8800', '#ffd24d'];
