@@ -385,6 +385,22 @@ def run_web_ui(
           .ve-scene.fx-bonus {
             box-shadow: inset 0 0 0 2px rgba(34,211,238,.42), 0 0 20px rgba(34,211,238,.28);
           }
+          .ve-dot {
+            position: absolute;
+            left: var(--x, 50%);
+            top: var(--y, 50%);
+            width: 6px;
+            height: 6px;
+            border-radius: 999px;
+            pointer-events: none;
+            z-index: 9;
+            opacity: 0.95;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px currentColor;
+          }
+          .ve-dot.bonus { color: #22d3ee; background: #22d3ee; }
+          .ve-dot.multi { color: #a78bfa; background: #a78bfa; }
+          .ve-dot.jackpot { color: #facc15; background: #facc15; }
         </style>
         <script>
           window.veloxUpdateScene = function(speed, cadence, inZone, action) {
@@ -446,6 +462,56 @@ def run_web_ui(
               fx.classList.remove('show');
               scene.classList.remove('fx-bonus', 'fx-multi', 'fx-jackpot');
             }, 850);
+            window.veloxPinballDotBurst(cssKind, cssKind === 'jackpot' ? 22 : 14);
+          };
+          window.veloxPinballDotBurst = function(kind, count) {
+            const scene = document.getElementById('ve-scene');
+            if (!scene) return;
+            const total = Math.max(6, Number(count || 14));
+            for (let i = 0; i < total; i += 1) {
+              const dot = document.createElement('span');
+              dot.className = `ve-dot ${kind || 'bonus'}`;
+              dot.style.setProperty('--x', `${50 + (Math.random() * 16 - 8)}%`);
+              dot.style.setProperty('--y', `${44 + (Math.random() * 18 - 9)}%`);
+              scene.appendChild(dot);
+              const angle = Math.random() * Math.PI * 2;
+              const dist = 18 + Math.random() * 44;
+              const dx = Math.cos(angle) * dist;
+              const dy = Math.sin(angle) * dist;
+              dot.animate(
+                [
+                  { transform: 'translate(-50%, -50%) scale(1)', opacity: 0.95 },
+                  {
+                    transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(0.25)`,
+                    opacity: 0,
+                  },
+                ],
+                { duration: 520 + Math.random() * 220, easing: 'cubic-bezier(.2,.7,.2,1)' },
+              );
+              window.setTimeout(() => dot.remove(), 900);
+            }
+          };
+          window.veloxPinballPattern = function(pattern) {
+            const p = pattern || 'bonus_chain';
+            const seq = {
+              bonus_chain: [
+                [0, 'bonus', 'BONUS!'],
+                [280, 'bonus', 'KEEP IT!'],
+              ],
+              step_clear: [
+                [0, 'multi', 'STEP CLEAR'],
+                [340, 'bonus', 'CLEAN LINE'],
+              ],
+              jackpot_rush: [
+                [0, 'multi', 'MULTI UP'],
+                [260, 'bonus', 'OVERDRIVE'],
+                [560, 'jackpot', 'JACKPOT!'],
+              ],
+            }[p] || [[0, 'bonus', 'BONUS!']];
+            seq.forEach((item) => {
+              const [delay, kind, label] = item;
+              window.setTimeout(() => window.veloxPinballFx(kind, label), delay);
+            });
           };
         </script>
         """
@@ -589,6 +655,7 @@ def run_web_ui(
             sim_multi_btn = ui.button("Trigger Multi").props("outline color=purple")
             sim_jackpot_btn = ui.button("Trigger Jackpot").props("outline color=amber")
             sim_bonus_btn = ui.button("Trigger Bonus").props("outline color=cyan")
+            sim_chain_btn = ui.button("Run Combo Chain").props("outline color=pink")
         pinball_sim_row.set_visibility(pinball_mode and simulate_ht)
 
         with ui.row().classes("w-full gap-2"):
@@ -1002,6 +1069,11 @@ def run_web_ui(
         pinball_score_bonus += reward
         pinball_last_bonus = f"+{reward} BONUS"
         _safe_run_js(f"window.veloxPinballFx('bonus', 'BONUS +{reward}');")
+
+    def trigger_pinball_pattern(name: str) -> None:
+        if not pinball_mode:
+            return
+        _safe_run_js(f"window.veloxPinballPattern('{name}');")
 
     def show_setup_screen() -> None:
         setup_header.set_visibility(True)
@@ -1533,6 +1605,7 @@ def run_web_ui(
                     in_zone = power_zone_ok is not False and cadence_zone_ok is not False
                     if in_zone:
                         trigger_pinball_event("multi")
+                        trigger_pinball_pattern("step_clear")
                     else:
                         pinball_last_bonus = "COMBO BREAK"
                         pinball_multiplier = 1
@@ -1547,6 +1620,7 @@ def run_web_ui(
                     and cadence_zone_ok is not False
                 ):
                     trigger_pinball_event("jackpot")
+                    trigger_pinball_pattern("jackpot_rush")
 
     def on_progress(progress: WorkoutProgress) -> None:
         state.progress = progress
@@ -1733,6 +1807,7 @@ def run_web_ui(
         sim_multi_btn.on_click(lambda: trigger_pinball_event("multi", manual=True))
         sim_jackpot_btn.on_click(lambda: trigger_pinball_event("jackpot", manual=True))
         sim_bonus_btn.on_click(lambda: trigger_pinball_event("bonus", manual=True))
+        sim_chain_btn.on_click(lambda: trigger_pinball_pattern("jackpot_rush"))
 
     refresh_templates()
     refresh_history()
