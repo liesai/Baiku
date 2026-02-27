@@ -1,4 +1,4 @@
-# velox-engine
+# Baikou
 
 MVP terminal-only pour home-trainer FTMS BLE (focus Elite Direto XRT), structuré pour évoluer en projet open-source et orchestration OpenClaw.
 
