@@ -45,6 +45,7 @@ ASSETS_ROUTE = "/velox-assets"
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 SPRITE_URL = f"{ASSETS_ROUTE}/cyclist_sprite_aligned.png"
 SCENE_BG_URL = f"{ASSETS_ROUTE}/forest_bg.png"
+DMD_CYCLIST_URL = f"{ASSETS_ROUTE}/dmd_cyclist_bonus.png"
 _ASSETS_MOUNTED = False
 
 
@@ -538,9 +539,11 @@ def run_web_ui(
             let flash = '';
             let flashKind = 'bonus';
             let flashUntil = 0;
+            const cyclist = new Image();
+            cyclist.src = '__DMD_CYCLIST_URL__';
             const off = document.createElement('canvas');
-            off.width = 128;
-            off.height = 32;
+            off.width = 192;
+            off.height = 64;
             const octx = off.getContext('2d', { alpha: false });
 
             function colors(kind) {
@@ -553,17 +556,19 @@ def run_web_ui(
               if (!ctx || !canvas) return;
               const w = canvas.width;
               const h = canvas.height;
-              const cols = 128;
-              const rows = 32;
+              const cols = off.width;
+              const rows = off.height;
               const cw = w / cols;
               const ch = h / rows;
+              const frame = octx.getImageData(0, 0, cols, rows).data;
               ctx.fillStyle = '#050202';
               ctx.fillRect(0, 0, w, h);
               for (let y = 0; y < rows; y += 1) {
                 for (let x = 0; x < cols; x += 1) {
                   const px = (x + 0.5) * cw;
                   const py = (y + 0.5) * ch;
-                  const lit = octx.getImageData(x, y, 1, 1).data[0] > 32;
+                  const idx = ((y * cols) + x) * 4;
+                  const lit = frame[idx] > 30 || frame[idx + 3] > 30;
                   ctx.fillStyle = lit ? glow : base;
                   ctx.beginPath();
                   ctx.arc(px, py, Math.min(cw, ch) * (lit ? 0.34 : 0.23), 0, Math.PI * 2);
@@ -585,14 +590,19 @@ def run_web_ui(
               const colorset = colors(kind);
               octx.fillStyle = '#000';
               octx.fillRect(0, 0, off.width, off.height);
+              if (cyclist.complete) {
+                octx.globalAlpha = flashUntil > now ? 0.24 : 0.12;
+                octx.drawImage(cyclist, 44, 8, 104, 48);
+                octx.globalAlpha = 1;
+              }
               octx.fillStyle = '#fff';
-              octx.font = 'bold 13px monospace';
+              octx.font = 'bold 22px monospace';
               octx.textAlign = 'center';
               octx.textBaseline = 'middle';
               const msg = flashUntil > now ? flash : ticker;
-              octx.fillText(msg || 'VELOX PINBALL READY', 64, 12);
-              octx.font = 'bold 10px monospace';
-              octx.fillText('TRACK  COMPETE  WIN', 64, 24);
+              octx.fillText(msg || 'VELOX READY', 96, 22);
+              octx.font = 'bold 12px monospace';
+              octx.fillText('TRACK  •  COMPETE  •  WIN', 96, 46);
               drawDotGrid(colorset[0], colorset[1], colorset[2]);
               requestAnimationFrame(render);
             }
@@ -602,18 +612,17 @@ def run_web_ui(
                 canvas = document.getElementById('ve-dmd');
                 if (!canvas) return;
                 ctx = canvas.getContext('2d', { alpha: false });
-                const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
                 const rect = canvas.getBoundingClientRect();
-                canvas.width = Math.floor(rect.width * dpr);
-                canvas.height = Math.floor(rect.height * dpr);
-                if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                canvas.width = Math.max(320, Math.floor(rect.width));
+                canvas.height = Math.max(88, Math.floor(rect.height));
+                if (ctx) ctx.setTransform(1, 0, 0, 1, 0, 0);
                 if (!window.__velox_dmd_started) {
                   window.__velox_dmd_started = true;
                   requestAnimationFrame(render);
                 }
               },
               ticker: function(msg) {
-                ticker = String(msg || '').slice(0, 36);
+                ticker = String(msg || '').slice(0, 24);
               },
               flash: function(msg, kind) {
                 flash = String(msg || '').slice(0, 24);
@@ -626,6 +635,7 @@ def run_web_ui(
         """
         .replace("__SPRITE_URL__", SPRITE_URL)
         .replace("__SCENE_BG_URL__", SCENE_BG_URL)
+        .replace("__DMD_CYCLIST_URL__", DMD_CYCLIST_URL)
     )
 
     templates = list_templates()
