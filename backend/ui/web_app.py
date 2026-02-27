@@ -725,25 +725,39 @@ def run_web_ui(
             course_cards_grid = ui.grid().classes("w-full grid-cols-1 md:grid-cols-3 gap-3")
             course_info = ui.label("No course loaded").classes("text-sm text-slate-300")
 
-        plan_chart = ui.echart(
-            {
-                "title": {
-                    "text": "Difficulty curve (target watts)",
-                    "left": "center",
-                    "textStyle": {"color": "#ffffff", "fontWeight": "bold", "fontFamily": "Arial"},
-                },
-                "tooltip": {"trigger": "axis"},
-                "xAxis": {"type": "category", "data": [], "axisLabel": {"color": "#ffffff"}},
-                "yAxis": {
-                    "type": "value",
-                    "name": "W",
-                    "axisLabel": {"color": "#ffffff"},
-                    "nameTextStyle": {"color": "#ffffff", "fontWeight": "bold"},
-                },
-                "series": [{"type": "bar", "data": []}],
-                "grid": {"left": 50, "right": 20, "top": 48, "bottom": 40},
-            }
-        ).classes("w-full h-72")
+        plan_chart = None
+        if pinball_mode:
+            with ui.card().classes("w-full gb-card gb-compact"):
+                ui.label("Pinball mode active: CSP-safe display").classes(
+                    "text-sm gb-title-neutral"
+                )
+                ui.label(
+                    "Workout preview chart disabled in pinball mode to avoid CSP unsafe-eval."
+                ).classes("text-xs gb-muted")
+        else:
+            plan_chart = ui.echart(
+                {
+                    "title": {
+                        "text": "Difficulty curve (target watts)",
+                        "left": "center",
+                        "textStyle": {
+                            "color": "#ffffff",
+                            "fontWeight": "bold",
+                            "fontFamily": "Arial",
+                        },
+                    },
+                    "tooltip": {"trigger": "axis"},
+                    "xAxis": {"type": "category", "data": [], "axisLabel": {"color": "#ffffff"}},
+                    "yAxis": {
+                        "type": "value",
+                        "name": "W",
+                        "axisLabel": {"color": "#ffffff"},
+                        "nameTextStyle": {"color": "#ffffff", "fontWeight": "bold"},
+                    },
+                    "series": [{"type": "bar", "data": []}],
+                    "grid": {"left": 50, "right": 20, "top": 48, "bottom": 40},
+                }
+            ).classes("w-full h-72")
 
         with ui.row().classes("w-full items-center gap-2"):
             start_btn = ui.button("Start")
@@ -856,115 +870,9 @@ def run_web_ui(
                 """
             ).classes("w-full")
 
+        live_chart = None
         with ui.card().classes("w-full gb-card gb-compact"):
-            live_chart = ui.echart(
-                {
-                    "title": {
-                        "text": "Live performance curve",
-                        "left": "center",
-                        "textStyle": {
-                            "color": "#ffffff",
-                            "fontWeight": "bold",
-                            "fontFamily": "Arial",
-                        },
-                    },
-                    "textStyle": {"fontFamily": "Arial", "fontWeight": "normal"},
-                    "legend": {
-                        "data": [
-                            "Power expected",
-                            "Power actual",
-                            "Cadence expected",
-                            "Cadence actual",
-                        ],
-                        "selected": {
-                            "Power expected": True,
-                            "Power actual": True,
-                            "Cadence expected": True,
-                            "Cadence actual": True,
-                        },
-                        "top": 24,
-                        "textStyle": {"color": "#ffffff"},
-                    },
-                    "tooltip": {"trigger": "axis"},
-                    "xAxis": {
-                        "type": "category",
-                        "data": [],
-                        "axisLabel": {"color": "#ffffff"},
-                    },
-                    "yAxis": [
-                        {
-                            "type": "value",
-                            "name": "W",
-                            "position": "left",
-                            "axisLabel": {"color": "#ffffff"},
-                            "nameTextStyle": {"color": "#ffffff", "fontWeight": "bold"},
-                            "splitLine": {"lineStyle": {"color": "rgba(148,163,184,.18)"}},
-                        },
-                        {
-                            "type": "value",
-                            "name": "rpm",
-                            "position": "right",
-                            "min": 40,
-                            "max": 130,
-                            "axisLabel": {"color": "#ffffff"},
-                            "nameTextStyle": {"color": "#ffffff", "fontWeight": "bold"},
-                            "splitLine": {"show": False},
-                        },
-                    ],
-                    "series": [
-                        {
-                            "name": "Power expected",
-                            "type": "line",
-                            "data": [],
-                            "smooth": False,
-                            "lineStyle": {
-                                "type": "dashed",
-                                "width": 2,
-                                "color": "rgba(148,163,184,.8)",
-                            },
-                            "symbol": "none",
-                        },
-                        {
-                            "name": "Power actual",
-                            "type": "line",
-                            "data": [],
-                            "smooth": True,
-                            "lineStyle": {"width": 3, "color": "#22d3ee"},
-                            "areaStyle": {
-                                "opacity": 0.22,
-                                "color": "rgba(56,189,248,.45)",
-                            },
-                            "connectNulls": False,
-                            "symbol": "none",
-                        },
-                        {
-                            "name": "Cadence expected",
-                            "type": "line",
-                            "yAxisIndex": 1,
-                            "data": [],
-                            "lineStyle": {
-                                "type": "dashed",
-                                "width": 2,
-                                "color": "#fbbf24",
-                            },
-                            "z": 3,
-                            "symbol": "none",
-                        },
-                        {
-                            "name": "Cadence actual",
-                            "type": "line",
-                            "yAxisIndex": 1,
-                            "data": [],
-                            "smooth": True,
-                            "lineStyle": {"width": 3, "color": "#86efac"},
-                            "z": 4,
-                            "connectNulls": False,
-                            "symbol": "none",
-                        },
-                    ],
-                    "grid": {"left": 48, "right": 48, "top": 70, "bottom": 32},
-                }
-            ).classes("w-full h-[250px]")
+            ui.label("Live chart disabled (CSP-safe mode)").classes("text-sm gb-muted")
 
     workout_view.set_visibility(False)
 
@@ -1361,6 +1269,8 @@ def run_web_ui(
         history.update()
 
     def refresh_plan_chart() -> None:
+        if plan_chart is None:
+            return
         options = cast(dict[str, Any], plan_chart.options)
         if state.workout is None:
             options["xAxis"]["data"] = []
@@ -1383,6 +1293,8 @@ def run_web_ui(
         plan_chart.update()
 
     def refresh_live_chart() -> None:
+        if live_chart is None:
+            return
         options = cast(dict[str, Any], live_chart.options)
         cadence_expected = timeline_expected_cadence[:]
         if cadence_expected and all(abs(v) < 0.1 for v in cadence_expected):
