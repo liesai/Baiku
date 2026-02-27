@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import math
 import os
 from pathlib import Path
 import time
@@ -54,11 +55,13 @@ _ASSETS_MOUNTED = False
 @dataclass
 class WebState:
     connected: bool = False
+    hm_connected: bool = False
     status: str = "Not connected"
     workout: WorkoutPlan | None = None
     progress: WorkoutProgress | None = None
     power: int | None = None
     cadence: float | None = None
+    heart_rate_bpm: int | None = None
     speed: float | None = None
     distance_km: float = 0.0
     last_ts: float | None = None
@@ -278,16 +281,6 @@ def run_web_ui(
             font-family: "Courier New", monospace;
             font-weight: 700;
             letter-spacing: 0.02em;
-          }
-          body.gb-layout-1080 {
-            height: 100vh;
-            overflow: hidden;
-            font-size: 0.95rem;
-          }
-          body.gb-layout-1440 {
-            height: 100vh;
-            overflow: hidden;
-            font-size: 1rem;
           }
           .gb-card {
             background: linear-gradient(180deg, var(--gb-surface) 0%, var(--gb-surface-2) 100%);
@@ -813,8 +806,8 @@ def run_web_ui(
     selected_device_address: str | None = None
     selected_template_label = ""
     zone_compliance = {"power_ok": 0, "power_total": 0, "rpm_ok": 0, "rpm_total": 0}
-    strict_mode = False
-    viewport_preset = "auto"
+    hm_detected = False
+    hm_sim_seed = 96.0
     session_started_at_utc: str | None = None
     current_snapshot_path: Path | None = None
     current_snapshot_csv_path: Path | None = None
@@ -841,8 +834,19 @@ def run_web_ui(
     timeline_step_ranges: list[tuple[int, int, str]] = []
     metric_samples: list[tuple[int | None, float | None, float | None]] = []
 
-    with ui.column().classes("w-full gap-1") as setup_header:
-        ui.label("VELOX ENGINE").classes("text-xl font-semibold tracking-wide")
+    with ui.column().classes("w-full gap-2") as setup_header:
+        with ui.row().classes("w-full items-center justify-between gap-2"):
+            ui.label("VELOX ENGINE").classes("text-xl font-semibold tracking-wide")
+            with ui.row().classes("items-center gap-4"):
+                with ui.row().classes("items-center gap-1"):
+                    ht_icon = ui.icon("directions_bike").classes("text-base")
+                    ui.label("HT").classes("text-xs font-semibold")
+                with ui.row().classes("items-center gap-1"):
+                    hm_icon = ui.icon("favorite").classes("text-base")
+                    ui.label("HM").classes("text-xs font-semibold")
+                open_connections_btn = ui.button("Connections").props("outline")
+                back_to_training_btn = ui.button("Back to training").props("outline")
+                back_to_training_btn.set_visibility(False)
         status_label = ui.label("Status: Not connected").classes("text-lg font-semibold")
         if simulate_ht:
             ui.label("SIM MODE - no BLE required").classes("text-orange-500 font-bold")
@@ -863,18 +867,7 @@ def run_web_ui(
                 delay_input = ui.number(
                     "Start delay (sec)", value=int(max(0, start_delay_sec)), min=0, max=180
                 )
-                strict_switch = ui.switch("Single-screen strict", value=False)
-                preset_select = ui.select(
-                    {"auto": "Auto", "1080p": "1080p", "1440p": "1440p"},
-                    value="auto",
-                    label="Viewport",
-                )
-                device_select = ui.select([], label="Device").classes("min-w-[280px]")
-                scan_btn = ui.button("Scan")
-                connect_btn = ui.button("Connect")
-                disconnect_btn = ui.button("Disconnect")
                 builder_btn = ui.button("Workout builder")
-                disconnect_btn.disable()
             selected_course_label = ui.label("Selected course: -").classes(
                 "text-sm font-medium"
             )
@@ -1002,6 +995,31 @@ def run_web_ui(
                 }
             ).classes("w-full h-56")
 
+    with ui.column().classes("w-full gap-4") as connections_view:
+        ui.label("Connections").classes("text-xl font-semibold")
+        with ui.card().classes("w-full gb-card"):
+            ui.label("Home Trainer (HT)").classes("text-base font-semibold")
+            with ui.row().classes("w-full items-end gap-2"):
+                ht_device_select = ui.select([], label="HT device").classes("min-w-[360px]")
+                ht_scan_btn = ui.button("Scan HT")
+                ht_connect_btn = ui.button("Connect HT")
+                ht_disconnect_btn = ui.button("Disconnect HT")
+                ht_disconnect_btn.disable()
+        with ui.card().classes("w-full gb-card"):
+            ui.label("Heart Monitor (HM)").classes("text-base font-semibold")
+            with ui.row().classes("w-full items-center gap-3"):
+                hm_sim_switch = ui.switch("Simulate HM", value=True)
+                hm_detect_btn = ui.button("Detect HM")
+                hm_connect_btn = ui.button("Connect HM")
+                hm_disconnect_btn = ui.button("Disconnect HM")
+                hm_hint_label = ui.label("HM: not detected").classes("text-sm gb-muted")
+                hm_disconnect_btn.disable()
+            ui.label(
+                "For now HM is simulated locally. Later we can plug real BLE HRM."
+            ).classes("text-xs gb-muted")
+
+    connections_view.set_visibility(False)
+
     with ui.column().classes("w-full gap-2") as workout_view:
         with ui.row().classes("w-full items-center justify-between"):
             ui.label("Workout Session").classes("text-lg gb-title-neutral")
@@ -1074,13 +1092,16 @@ def run_web_ui(
                         "text-sm font-semibold"
                     ).props("id=ve-guidance")
 
-        with ui.grid().classes("w-full grid-cols-1 md:grid-cols-4 gap-2"):
+        with ui.grid().classes("w-full grid-cols-1 md:grid-cols-5 gap-2"):
             with ui.card().classes("w-full gb-kpi gb-compact"):
                 ui.label("Power").classes("text-xs gb-title-neutral")
                 kpi_power = ui.label("-- W").classes("gb-number").props("id=ve-kpi-power")
             with ui.card().classes("w-full gb-kpi gb-compact"):
                 ui.label("Cadence").classes("text-xs gb-title-neutral")
                 kpi_cadence = ui.label("-- rpm").classes("gb-number").props("id=ve-kpi-cadence")
+            with ui.card().classes("w-full gb-kpi gb-compact"):
+                ui.label("Heart rate").classes("text-xs gb-title-neutral")
+                kpi_hr = ui.label("-- bpm").classes("gb-number")
             with ui.card().classes("w-full gb-kpi gb-compact"):
                 ui.label("Speed").classes("text-xs gb-title-neutral")
                 kpi_speed = ui.label("-- km/h").classes("gb-number").props("id=ve-kpi-speed")
@@ -1389,21 +1410,15 @@ def run_web_ui(
         )
 
     def apply_layout_mode() -> None:
-        cls = "gb-layout-auto"
-        if strict_mode and viewport_preset == "1080p":
-            cls = "gb-layout-1080"
-        elif strict_mode and viewport_preset == "1440p":
-            cls = "gb-layout-1440"
         theme_cls = "gb-theme-pinball" if pinball_mode else "gb-theme-classic"
         if core.loop is None:
             # NiceGUI loop/client not ready yet during initial startup.
             return
         _safe_run_js(
             "document.body.classList.remove("
-            "'gb-layout-auto','gb-layout-1080','gb-layout-1440',"
             "'gb-theme-classic','gb-theme-pinball'"
             ");"
-            f"document.body.classList.add('{cls}','{theme_cls}');"
+            f"document.body.classList.add('{theme_cls}');"
         )
 
     def _safe_run_js(code: str) -> None:
@@ -1456,11 +1471,21 @@ def run_web_ui(
     def show_setup_screen() -> None:
         setup_header.set_visibility(True)
         setup_view.set_visibility(True)
+        connections_view.set_visibility(False)
+        back_to_training_btn.set_visibility(False)
+        workout_view.set_visibility(False)
+
+    def show_connections_screen() -> None:
+        setup_header.set_visibility(True)
+        setup_view.set_visibility(False)
+        connections_view.set_visibility(True)
+        back_to_training_btn.set_visibility(True)
         workout_view.set_visibility(False)
 
     def show_workout_screen() -> None:
         setup_header.set_visibility(False)
         setup_view.set_visibility(False)
+        connections_view.set_visibility(False)
         workout_view.set_visibility(True)
         if pinball_mode:
             _safe_run_js("window.veloxDmd.init();")
@@ -1773,8 +1798,20 @@ def run_web_ui(
         nonlocal last_coaching_alert_key, sound_alerts
         nonlocal last_encourage_bucket
         status_label.text = f"Status: {state.status}"
+        ht_icon.style(f"color: {'#22c55e' if state.connected else '#6b7280'};")
+        hm_icon.style(f"color: {'#22c55e' if state.hm_connected else '#6b7280'};")
+        hm_hint_label.text = (
+            "HM: connected"
+            if state.hm_connected
+            else ("HM: detected" if hm_detected else "HM: not detected")
+        )
         kpi_power.text = _fmt_power(state.power)
         kpi_cadence.text = _fmt_cadence(state.cadence)
+        kpi_hr.text = (
+            f"{int(round(state.heart_rate_bpm))} bpm"
+            if state.heart_rate_bpm is not None
+            else "-- bpm"
+        )
         kpi_speed.text = _fmt_speed(state.speed)
         kpi_distance.text = f"{_fmt_number(state.distance_km, 2)} km"
         mode_label.text = f"Mode: {state.mode.upper()}"
@@ -1980,47 +2017,75 @@ def run_web_ui(
         start_btn.set_enabled(state.connected and state.workout is not None)
         stop_btn.set_enabled(state.progress is not None)
         back_btn.set_enabled(state.progress is None)
-        connect_btn.set_enabled(not state.connected)
-        disconnect_btn.set_enabled(state.connected)
+        ht_connect_btn.set_enabled(not state.connected)
+        ht_disconnect_btn.set_enabled(state.connected)
+        hm_connect_btn.set_enabled(hm_detected and not state.hm_connected)
+        hm_disconnect_btn.set_enabled(state.hm_connected)
         export_json_btn.set_enabled(current_snapshot_path is not None)
         export_csv_btn.set_enabled(current_snapshot_csv_path is not None)
         refresh_plan_chart()
         refresh_live_chart()
 
-    async def on_scan() -> None:
+    async def on_scan_ht() -> None:
         nonlocal devices, selected_device_address
-        state.status = "Scanning..."
+        state.status = "Scanning HT..."
         refresh_ui()
         devices = await controller.scan()
         options = {f"{d.name} ({d.address})": d.address for d in devices}
-        device_select.options = options
+        ht_device_select.options = options
         if options:
             selected_device_address = next(iter(options.values()))
-            device_select.value = selected_device_address
-        state.status = f"Scan done: {len(devices)} devices"
+            ht_device_select.value = selected_device_address
+        state.status = f"HT scan done: {len(devices)} devices"
         refresh_ui()
 
-    async def on_connect() -> None:
+    async def on_connect_ht() -> None:
         nonlocal selected_device_address
-        selected_device_address = cast(str | None, device_select.value)
+        selected_device_address = cast(str | None, ht_device_select.value)
         if not selected_device_address:
-            state.status = "Select a device first"
+            state.status = "Select an HT device first"
             refresh_ui()
             return
-        state.status = "Connecting..."
+        state.status = "Connecting HT..."
         refresh_ui()
         label = await controller.connect(
             target=selected_device_address,
             metrics_callback=on_metrics,
         )
         state.connected = True
-        state.status = f"Connected: {label}"
+        state.status = f"HT connected: {label}"
         refresh_ui()
 
-    async def on_disconnect() -> None:
+    async def on_disconnect_ht() -> None:
         await controller.disconnect()
         state.connected = False
-        state.status = "Disconnected"
+        state.status = "HT disconnected"
+        refresh_ui()
+
+    def on_detect_hm() -> None:
+        nonlocal hm_detected
+        hm_detected = bool(hm_sim_switch.value)
+        if hm_detected:
+            state.status = "HM detected (simulated)"
+        else:
+            state.hm_connected = False
+            state.heart_rate_bpm = None
+            state.status = "HM not detected"
+        refresh_ui()
+
+    def on_connect_hm() -> None:
+        if not hm_detected:
+            state.status = "Detect HM first"
+            refresh_ui()
+            return
+        state.hm_connected = True
+        state.status = "HM connected"
+        refresh_ui()
+
+    def on_disconnect_hm() -> None:
+        state.hm_connected = False
+        state.heart_rate_bpm = None
+        state.status = "HM disconnected"
         refresh_ui()
 
     def build_expected_timeline() -> None:
@@ -2064,6 +2129,7 @@ def run_web_ui(
         nonlocal last_goal_tick_ts
         nonlocal pinball_score_bonus, pinball_multiplier, pinball_jackpots
         nonlocal pinball_last_bonus, pinball_last_step_seen, pinball_last_jackpot_ts
+        nonlocal hm_sim_seed
         now = asyncio.get_event_loop().time()
         if state.last_ts is not None and metrics.instantaneous_speed_kmh is not None:
             state.distance_km += (
@@ -2073,6 +2139,20 @@ def run_web_ui(
         state.power = metrics.instantaneous_power
         state.cadence = metrics.instantaneous_cadence
         state.speed = metrics.instantaneous_speed_kmh
+        hm_simulate = bool(hm_sim_switch.value)
+        if state.hm_connected and hm_simulate:
+            base = 88.0
+            if state.power is not None:
+                base += state.power * 0.20
+            if state.cadence is not None:
+                base += max(0.0, state.cadence - 70.0) * 0.35
+            phase = (state.progress.elapsed_total_sec if state.progress else now) / 9.0
+            wobble = 3.0 * math.sin(phase)
+            target_hr = max(78.0, min(196.0, base + wobble))
+            hm_sim_seed = (hm_sim_seed * 0.82) + (target_hr * 0.18)
+            state.heart_rate_bpm = int(round(hm_sim_seed))
+        else:
+            state.heart_rate_bpm = None
         metric_samples.append(
             (
                 metrics.instantaneous_power,
@@ -2300,16 +2380,12 @@ def run_web_ui(
         refresh_templates()
         refresh_ui()
 
-    def on_strict_change() -> None:
-        nonlocal strict_mode
-        strict_mode = bool(strict_switch.value)
-        apply_layout_mode()
+    def on_open_connections() -> None:
+        show_connections_screen()
         refresh_ui()
 
-    def on_preset_change() -> None:
-        nonlocal viewport_preset
-        viewport_preset = str(preset_select.value or "auto")
-        apply_layout_mode()
+    def on_back_to_training_setup() -> None:
+        show_setup_screen()
         refresh_ui()
 
     def on_ftp_or_mode_change() -> None:
@@ -2334,14 +2410,17 @@ def run_web_ui(
     band_select.on_value_change(lambda _: refresh_templates())
     ftp_input.on_value_change(lambda _: on_ftp_or_mode_change())
     mode_select.on_value_change(lambda _: on_ftp_or_mode_change())
-    strict_switch.on_value_change(lambda _: on_strict_change())
-    preset_select.on_value_change(lambda _: on_preset_change())
     sound_toggle.on_value_change(lambda _: on_sound_toggle())
     analytics_demo_switch.on_value_change(lambda _: on_analytics_demo_toggle())
     analytics_window_select.on_value_change(lambda _: on_analytics_window_change())
-    scan_btn.on_click(on_scan)
-    connect_btn.on_click(on_connect)
-    disconnect_btn.on_click(on_disconnect)
+    open_connections_btn.on_click(on_open_connections)
+    back_to_training_btn.on_click(on_back_to_training_setup)
+    ht_scan_btn.on_click(on_scan_ht)
+    ht_connect_btn.on_click(on_connect_ht)
+    ht_disconnect_btn.on_click(on_disconnect_ht)
+    hm_detect_btn.on_click(on_detect_hm)
+    hm_connect_btn.on_click(on_connect_hm)
+    hm_disconnect_btn.on_click(on_disconnect_hm)
     builder_btn.on_click(on_open_builder)
     add_step_btn.on_click(on_add_builder_step)
     remove_last_step_btn.on_click(on_remove_builder_step)
