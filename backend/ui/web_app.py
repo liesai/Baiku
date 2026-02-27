@@ -46,6 +46,8 @@ ASSETS_ROUTE = "/velox-assets"
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 SPRITE_URL = f"{ASSETS_ROUTE}/cyclist_sprite_aligned.png"
 SCENE_BG_URL = f"{ASSETS_ROUTE}/forest_bg.png"
+SCENE_BG_ALT_1_URL = f"{ASSETS_ROUTE}/forest_bg_alt_1.jpg"
+SCENE_BG_ALT_2_URL = f"{ASSETS_ROUTE}/forest_bg_alt_2.jpg"
 DMD_CYCLIST_URL = f"{ASSETS_ROUTE}/dmd_cyclist_bonus.png"
 _ASSETS_MOUNTED = False
 
@@ -371,6 +373,20 @@ def run_web_ui(
             background-position-x: var(--ve-bg-offset);
             filter: saturate(1.05) contrast(1.02);
           }
+          .ve-bg-alt-1,
+          .ve-bg-alt-2 {
+            opacity: 0;
+            background-position-x: calc(var(--ve-bg-offset) * 0.72);
+            transition: opacity .8s ease;
+          }
+          .ve-bg-alt-1 {
+            background-image: url('__SCENE_BG_ALT_1_URL__');
+            filter: saturate(1.08) contrast(1.03) brightness(1.03);
+          }
+          .ve-bg-alt-2 {
+            background-image: url('__SCENE_BG_ALT_2_URL__');
+            filter: saturate(1.06) contrast(1.04) brightness(1.02);
+          }
           .ve-rider {
             position: absolute;
             left: 74px;
@@ -459,12 +475,14 @@ def run_web_ui(
           .ve-dot.jackpot { color: #facc15; background: #facc15; }
         </style>
         <script>
-          window.veloxUpdateScene = function(speed, cadence, inZone, action) {
+          window.veloxUpdateScene = function(speed, cadence, inZone, action, elapsedSec) {
             const scene = document.getElementById('ve-scene');
             if (!scene) return;
             const speedNode = document.getElementById('ve-scene-speed');
             const actionNode = document.getElementById('ve-scene-action');
             const spriteNode = document.getElementById('ve-sprite');
+            const alt1Node = document.querySelector('#ve-scene .ve-bg-alt-1');
+            const alt2Node = document.querySelector('#ve-scene .ve-bg-alt-2');
             const state = window.__velox_scene_state || {
               bg: 0,
               pedal: 0,
@@ -483,6 +501,10 @@ def run_web_ui(
             scene.style.setProperty('--ve-rider-bob', `${bob}px`);
             scene.dataset.zone = inZone ? 'ok' : 'bad';
             scene.dataset.action = action || 'steady';
+            const elapsed = Math.max(0, Number(elapsedSec || 0));
+            const bgIndex = Math.floor(elapsed / 40) % 3;
+            if (alt1Node) alt1Node.style.opacity = bgIndex === 1 ? '0.72' : '0';
+            if (alt2Node) alt2Node.style.opacity = bgIndex === 2 ? '0.68' : '0';
             if (spriteNode) {
               const frame = Math.floor(state.frameTick) % 3;
               const x = frame * 50;
@@ -530,7 +552,7 @@ def run_web_ui(
             fx.textContent = label || (cssKind === 'phase' ? 'TRANSITION' : 'GOOD JOB');
             void fx.offsetWidth;
             fx.classList.add('show');
-            const duration = Math.max(700, Number(durationMs || 1200));
+            const duration = Math.max(1100, Number(durationMs || 1700));
             window.setTimeout(() => {
               fx.classList.remove('show');
             }, duration);
@@ -800,6 +822,8 @@ def run_web_ui(
         """
         .replace("__SPRITE_URL__", SPRITE_URL)
         .replace("__SCENE_BG_URL__", SCENE_BG_URL)
+        .replace("__SCENE_BG_ALT_1_URL__", SCENE_BG_ALT_1_URL)
+        .replace("__SCENE_BG_ALT_2_URL__", SCENE_BG_ALT_2_URL)
         .replace("__DMD_CYCLIST_URL__", DMD_CYCLIST_URL)
     )
 
@@ -1023,6 +1047,8 @@ def run_web_ui(
                 """
                 <div id="ve-scene" class="ve-scene" data-zone="ok">
                   <div class="ve-bg ve-bg-main"></div>
+                  <div class="ve-bg ve-bg-alt-1"></div>
+                  <div class="ve-bg ve-bg-alt-2"></div>
                   <div id="ve-fx" class="ve-fx">BONUS!</div>
                   <div class="ve-hud">
                     <span id="ve-scene-action" class="ve-hud-action">HOLD</span>
@@ -1750,17 +1776,23 @@ def run_web_ui(
                     if power_in_zone is True and cadence_in_zone is True:
                         _safe_run_js(
                             "window.veloxCoachCue("
-                            "'coach', 'Excellent, garde ce rythme!', 950);"
+                            "'coach', 'Excellent, garde ce rythme!', 1700);"
                         )
                     elif scene_action == "up":
-                        _safe_run_js("window.veloxCoachCue('coach', 'Allez, monte un peu!', 900);")
+                        _safe_run_js(
+                            "window.veloxCoachCue("
+                            "'coach', 'Allez, monte un peu!', 1700);"
+                        )
                     elif scene_action == "down":
                         _safe_run_js(
                             "window.veloxCoachCue("
-                            "'coach', 'Souple, reduis legerement', 900);"
+                            "'coach', 'Souple, reduis legerement', 1700);"
                         )
                     else:
-                        _safe_run_js("window.veloxCoachCue('coach', 'Stable, continue', 850);")
+                        _safe_run_js(
+                            "window.veloxCoachCue("
+                            "'coach', 'Stable, continue', 1600);"
+                        )
 
                 if state.workout and state.progress.step_index < state.progress.step_total:
                     next_step = state.workout.steps[state.progress.step_index]
@@ -1773,7 +1805,7 @@ def run_web_ui(
                             next_name = next_step.label or f"Step {state.progress.step_index + 1}"
                             cue = f"Dans {sec_to_next}s: {next_name} ({next_step.target_watts}W)"
                             _safe_run_js(
-                                f"window.veloxCoachCue('phase', {cue!r}, 1300);"
+                                f"window.veloxCoachCue('phase', {cue!r}, 2200);"
                             )
                 else:
                     last_phase_notice_key = None
@@ -1782,7 +1814,8 @@ def run_web_ui(
             f"{state.speed if state.speed is not None else 0},"
             f"{state.cadence if state.cadence is not None else 0},"
             f"{'true' if in_zone_for_scene else 'false'},"
-            f"'{scene_action}'"
+            f"'{scene_action}',"
+            f"{state.progress.elapsed_total_sec if state.progress is not None else 0}"
             ");"
         )
 
