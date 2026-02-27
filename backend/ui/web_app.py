@@ -354,6 +354,37 @@ def run_web_ui(
             color: #e2e8f0;
           }
           .ve-hud-speed { color: #7dd3fc; }
+          .ve-fx {
+            position: absolute;
+            left: 50%;
+            top: 42%;
+            transform: translate(-50%, -50%) scale(0.72);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 8;
+            font-size: 1.35rem;
+            font-weight: 900;
+            letter-spacing: 0.05em;
+            text-shadow: 0 0 12px rgba(2, 6, 23, 0.75);
+            transition: transform .22s ease-out, opacity .22s ease-out;
+            color: #f8fafc;
+          }
+          .ve-fx.show {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+          }
+          .ve-fx.bonus { color: #22d3ee; }
+          .ve-fx.multi { color: #a78bfa; }
+          .ve-fx.jackpot { color: #facc15; }
+          .ve-scene.fx-jackpot {
+            box-shadow: inset 0 0 0 2px rgba(250,204,21,.45), 0 0 24px rgba(250,204,21,.38);
+          }
+          .ve-scene.fx-multi {
+            box-shadow: inset 0 0 0 2px rgba(167,139,250,.42), 0 0 20px rgba(167,139,250,.3);
+          }
+          .ve-scene.fx-bonus {
+            box-shadow: inset 0 0 0 2px rgba(34,211,238,.42), 0 0 20px rgba(34,211,238,.28);
+          }
         </style>
         <script>
           window.veloxUpdateScene = function(speed, cadence, inZone, action) {
@@ -394,6 +425,27 @@ def run_web_ui(
               else actionNode.textContent = 'HOLD';
             }
             window.__velox_scene_state = state;
+          };
+          window.veloxPinballFx = function(kind, label) {
+            const scene = document.getElementById('ve-scene');
+            const fx = document.getElementById('ve-fx');
+            if (!scene || !fx) return;
+            scene.classList.remove('fx-bonus', 'fx-multi', 'fx-jackpot');
+            void scene.offsetWidth;
+            const cssKind = (kind === 'jackpot' || kind === 'multi') ? kind : 'bonus';
+            scene.classList.add(`fx-${cssKind}`);
+            fx.classList.remove('bonus', 'multi', 'jackpot', 'show');
+            fx.classList.add(cssKind);
+            if (label) fx.textContent = label;
+            else if (cssKind === 'jackpot') fx.textContent = 'JACKPOT!';
+            else if (cssKind === 'multi') fx.textContent = 'MULTI!';
+            else fx.textContent = 'BONUS!';
+            void fx.offsetWidth;
+            fx.classList.add('show');
+            window.setTimeout(() => {
+              fx.classList.remove('show');
+              scene.classList.remove('fx-bonus', 'fx-multi', 'fx-jackpot');
+            }, 850);
           };
         </script>
         """
@@ -532,6 +584,13 @@ def run_web_ui(
             pinball_reward_label = ui.label("BONUS READY").classes("pinball-chip")
         pinball_hud_row.set_visibility(pinball_mode)
 
+        with ui.row().classes("w-full gap-2") as pinball_sim_row:
+            ui.label("Sim Pinball").classes("pinball-chip")
+            sim_multi_btn = ui.button("Trigger Multi").props("outline color=purple")
+            sim_jackpot_btn = ui.button("Trigger Jackpot").props("outline color=amber")
+            sim_bonus_btn = ui.button("Trigger Bonus").props("outline color=cyan")
+        pinball_sim_row.set_visibility(pinball_mode and simulate_ht)
+
         with ui.row().classes("w-full gap-2"):
             with ui.card().classes("w-full gb-card gb-compact"):
                 with ui.row().classes("w-full items-center gap-4 flex-wrap"):
@@ -575,6 +634,7 @@ def run_web_ui(
                 """
                 <div id="ve-scene" class="ve-scene" data-zone="ok">
                   <div class="ve-bg ve-bg-main"></div>
+                  <div id="ve-fx" class="ve-fx">BONUS!</div>
                   <div class="ve-hud">
                     <span id="ve-scene-action" class="ve-hud-action">HOLD</span>
                     <span id="ve-scene-speed" class="ve-hud-speed">0,0 km/h</span>
@@ -914,6 +974,34 @@ def run_web_ui(
             ui.run_javascript(code)
         except (AssertionError, RuntimeError):
             return
+
+    def trigger_pinball_event(kind: str, *, manual: bool = False) -> None:
+        nonlocal pinball_score_bonus, pinball_multiplier, pinball_jackpots
+        nonlocal pinball_last_bonus, pinball_last_jackpot_ts
+        if not pinball_mode:
+            return
+        now_ts = time.monotonic()
+        if kind == "multi":
+            reward = 80 * pinball_multiplier
+            pinball_score_bonus += reward
+            pinball_multiplier = min(8, pinball_multiplier + 1)
+            pinball_last_bonus = f"+{reward} MULTI"
+            _safe_run_js(f"window.veloxPinballFx('multi', 'MULTI +{reward}');")
+            return
+        if kind == "jackpot":
+            if not manual and (now_ts - pinball_last_jackpot_ts) < 6.0:
+                return
+            pinball_jackpots += 1
+            reward = 150 * pinball_multiplier
+            pinball_score_bonus += reward
+            pinball_last_bonus = f"JACKPOT +{reward}"
+            pinball_last_jackpot_ts = now_ts
+            _safe_run_js(f"window.veloxPinballFx('jackpot', 'JACKPOT +{reward}');")
+            return
+        reward = 60 * pinball_multiplier
+        pinball_score_bonus += reward
+        pinball_last_bonus = f"+{reward} BONUS"
+        _safe_run_js(f"window.veloxPinballFx('bonus', 'BONUS +{reward}');")
 
     def show_setup_screen() -> None:
         setup_header.set_visibility(True)
@@ -1444,10 +1532,7 @@ def run_web_ui(
                 elif state.progress.step_index != pinball_last_step_seen:
                     in_zone = power_zone_ok is not False and cadence_zone_ok is not False
                     if in_zone:
-                        reward = 100 * pinball_multiplier
-                        pinball_score_bonus += reward
-                        pinball_multiplier = min(6, pinball_multiplier + 1)
-                        pinball_last_bonus = f"+{reward} STEP CLEAR"
+                        trigger_pinball_event("multi")
                     else:
                         pinball_last_bonus = "COMBO BREAK"
                         pinball_multiplier = 1
@@ -1460,12 +1545,8 @@ def run_web_ui(
                     and expected_hi >= int(state.ftp_watts * 0.95)
                     and power_zone_ok is True
                     and cadence_zone_ok is not False
-                    and (now - pinball_last_jackpot_ts) >= 6.0
                 ):
-                    pinball_jackpots += 1
-                    pinball_score_bonus += 150 * pinball_multiplier
-                    pinball_last_bonus = f"JACKPOT +{150 * pinball_multiplier}"
-                    pinball_last_jackpot_ts = now
+                    trigger_pinball_event("jackpot")
 
     def on_progress(progress: WorkoutProgress) -> None:
         state.progress = progress
@@ -1648,6 +1729,10 @@ def run_web_ui(
     back_btn.on_click(on_back_to_setup)
     export_json_btn.on_click(on_export_json)
     export_csv_btn.on_click(on_export_csv)
+    if pinball_mode and simulate_ht:
+        sim_multi_btn.on_click(lambda: trigger_pinball_event("multi", manual=True))
+        sim_jackpot_btn.on_click(lambda: trigger_pinball_event("jackpot", manual=True))
+        sim_bonus_btn.on_click(lambda: trigger_pinball_event("bonus", manual=True))
 
     refresh_templates()
     refresh_history()
