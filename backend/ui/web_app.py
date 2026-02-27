@@ -249,7 +249,7 @@ def run_web_ui(
             position: relative;
             z-index: 2;
             width: 100%;
-            height: 88px;
+            height: 96px;
             border-radius: 8px;
             background: #090303;
             display: block;
@@ -570,7 +570,7 @@ def run_web_ui(
             let flashKind = 'bonus';
             let flashUntil = 0;
             const off = document.createElement('canvas');
-            off.width = 192;
+            off.width = 320;
             off.height = 64;
             const octx = off.getContext('2d', { willReadFrequently: true });
 
@@ -599,12 +599,12 @@ def run_web_ui(
                   const lit = frame[idx] > 30;
                   ctx.fillStyle = lit ? glow : base;
                   ctx.beginPath();
-                  ctx.arc(px, py, Math.min(cw, ch) * (lit ? 0.34 : 0.23), 0, Math.PI * 2);
+                  ctx.arc(px, py, Math.min(cw, ch) * (lit ? 0.28 : 0.18), 0, Math.PI * 2);
                   ctx.fill();
                   if (lit) {
                     ctx.fillStyle = hot;
                     ctx.beginPath();
-                    ctx.arc(px, py, Math.min(cw, ch) * 0.14, 0, Math.PI * 2);
+                    ctx.arc(px, py, Math.min(cw, ch) * 0.1, 0, Math.PI * 2);
                     ctx.fill();
                   }
                 }
@@ -623,9 +623,9 @@ def run_web_ui(
               octx.textAlign = 'center';
               octx.textBaseline = 'middle';
               const msg = flashUntil > now ? flash : ticker;
-              octx.fillText(msg || 'VELOX READY', 96, 22);
+              octx.fillText(msg || 'VELOX READY', 160, 22);
               octx.font = 'bold 12px monospace';
-              octx.fillText('TRACK  •  COMPETE  •  WIN', 96, 46);
+              octx.fillText('TRACK  •  COMPETE  •  WIN', 160, 46);
               try {
                 drawDotGrid(colorset[0], colorset[1], colorset[2]);
               } catch (e) {
