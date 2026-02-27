@@ -44,13 +44,22 @@ class AsyncBridge:
 
 
 class VeloxUI:
-    def __init__(self, root: tk.Tk, simulate_ht: bool = False) -> None:
+    def __init__(
+        self,
+        root: tk.Tk,
+        simulate_ht: bool = False,
+        ble_pair: bool = True,
+    ) -> None:
         self.root = root
         self.root.title("Velox Engine")
         self.root.geometry("1240x860")
 
         self.bridge = AsyncBridge()
-        self.controller = UIController(debug_ftms=False, simulate_ht=simulate_ht)
+        self.controller = UIController(
+            debug_ftms=False,
+            simulate_ht=simulate_ht,
+            ble_pair=ble_pair,
+        )
         self.simulate_ht = simulate_ht
 
         self.devices: list[ScannedDevice] = []
@@ -670,9 +679,10 @@ class VeloxUI:
             self.device_list.delete(0, tk.END)
             for device in self.devices:
                 mark = "FTMS" if device.has_ftms else "-"
+                manufacturer = f" | {device.manufacturer}" if device.manufacturer else ""
                 self.device_list.insert(
                     tk.END,
-                    f"{device.name} | {device.address} | RSSI={device.rssi} [{mark}]",
+                    f"{device.name}{manufacturer} | {device.address} | RSSI={device.rssi} [{mark}]",
                 )
             self.status_var.set(f"Scan done: {len(self.devices)} devices")
 
@@ -1098,8 +1108,8 @@ class VeloxUI:
         self.root.destroy()
 
 
-def run_ui(simulate_ht: bool = False) -> int:
+def run_ui(simulate_ht: bool = False, ble_pair: bool = True) -> int:
     root = tk.Tk()
-    VeloxUI(root, simulate_ht=simulate_ht)
+    VeloxUI(root, simulate_ht=simulate_ht, ble_pair=ble_pair)
     root.mainloop()
     return 0

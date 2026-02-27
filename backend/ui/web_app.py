@@ -44,6 +44,7 @@ MAX_CADENCE_RPM = 130
 MAX_SPEED_KMH = 70
 TIMELINE_SAMPLE_SEC = 2
 ACTION_SWITCH_MIN_SEC = 2.0
+HT_CONNECT_TIMEOUT_SEC = 40.0
 ASSETS_ROUTE = "/velox-assets"
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 SPRITE_URL = f"{ASSETS_ROUTE}/cyclist_sprite_aligned.png"
@@ -57,6 +58,10 @@ class WebState:
     connected: bool = False
     hm_connected: bool = False
     status: str = "Not connected"
+    ht_device_name: str | None = None
+    hm_device_name: str | None = None
+    erg_ready: bool | None = None
+    ht_busy: bool = False
     workout: WorkoutPlan | None = None
     progress: WorkoutProgress | None = None
     power: int | None = None
@@ -114,6 +119,20 @@ def _fmt_timeline_mark(total_seconds: int) -> str:
     return f"{rounded_min:02d}:00"
 
 
+def _fmt_device_label(device: ScannedDevice) -> str:
+    icon = "🚴" if device.has_ftms else "📶"
+    details = device.name
+    if device.manufacturer:
+        details = f"{details} ({device.manufacturer})"
+    return (
+        f"{icon} {details} • {device.address} • RSSI {device.rssi}"
+    )
+
+
+def _ht_candidates(devices: list[ScannedDevice]) -> list[ScannedDevice]:
+    return [d for d in devices if d.has_ftms]
+
+
 def _gauge_options(title: str, unit: str, max_value: int) -> dict[str, Any]:
     return {
         "title": {
@@ -166,6 +185,7 @@ def _gauge_options(title: str, unit: str, max_value: int) -> dict[str, Any]:
 def run_web_ui(
     *,
     simulate_ht: bool = False,
+    ble_pair: bool = True,
     host: str = "127.0.0.1",
     port: int = 8088,
     start_delay_sec: int = 10,
@@ -180,7 +200,11 @@ def run_web_ui(
             pass
         _ASSETS_MOUNTED = True
 
-    controller = UIController(debug_ftms=False, simulate_ht=simulate_ht)
+    controller = UIController(
+        debug_ftms=False,
+        simulate_ht=simulate_ht,
+        ble_pair=ble_pair,
+    )
     state = WebState()
     pinball_mode = ui_theme == "pinball"
     csp_safe_mode = pinball_mode and os.getenv("VELOX_UI_CSP_SAFE", "").lower() in {
@@ -841,9 +865,12 @@ def run_web_ui(
                 with ui.row().classes("items-center gap-1"):
                     ht_icon = ui.icon("directions_bike").classes("text-base")
                     ui.label("HT").classes("text-xs font-semibold")
+                    ht_name_label = ui.label("not connected").classes("text-xs gb-muted")
+                    erg_badge = ui.label("ERG ?").classes("text-xs font-semibold")
                 with ui.row().classes("items-center gap-1"):
                     hm_icon = ui.icon("favorite").classes("text-base")
                     ui.label("HM").classes("text-xs font-semibold")
+                    hm_name_label = ui.label("not connected").classes("text-xs gb-muted")
                 open_connections_btn = ui.button("Connections").props("outline")
                 back_to_training_btn = ui.button("Back to training").props("outline")
                 back_to_training_btn.set_visibility(False)
@@ -1839,6 +1866,20 @@ def run_web_ui(
         status_label.text = f"Status: {state.status}"
         ht_icon.style(f"color: {'#22c55e' if state.connected else '#6b7280'};")
         hm_icon.style(f"color: {'#22c55e' if state.hm_connected else '#6b7280'};")
+        ht_name_label.text = state.ht_device_name or "not connected"
+        hm_name_label.text = state.hm_device_name or "not connected"
+        if state.erg_ready is True:
+            erg_badge.text = "ERG OK"
+            erg_badge.style(
+                "color: #052e16; background: #22c55e; padding: 2px 6px; "
+                "border-radius: 10px;"
+            )
+        else:
+            erg_badge.text = "ERG ?"
+            erg_badge.style(
+                "color: #d1d5db; background: #374151; padding: 2px 6px; "
+                "border-radius: 10px;"
+            )
         hm_hint_label.text = (
             "HM: connected"
             if state.hm_connected
@@ -2056,8 +2097,9 @@ def run_web_ui(
         start_btn.set_enabled(state.connected and state.workout is not None)
         stop_btn.set_enabled(state.progress is not None)
         back_btn.set_enabled(state.progress is None)
-        ht_connect_btn.set_enabled(not state.connected)
-        ht_disconnect_btn.set_enabled(state.connected)
+        ht_connect_btn.set_enabled((not state.connected) and (not state.ht_busy))
+        ht_disconnect_btn.set_enabled(state.connected and (not state.ht_busy))
+        ht_scan_btn.set_enabled(not state.ht_busy)
         hm_connect_btn.set_enabled(hm_detected and not state.hm_connected)
         hm_disconnect_btn.set_enabled(state.hm_connected)
         export_json_btn.set_enabled(current_snapshot_path is not None)
@@ -2067,39 +2109,148 @@ def run_web_ui(
         refresh_plan_chart()
         refresh_live_chart()
 
-    async def on_scan_ht() -> None:
+    async def on_scan_ht(auto_connect: bool = True) -> None:
         nonlocal devices, selected_device_address
+        if state.ht_busy:
+            return
+        state.ht_busy = True
+        ftms_devices: list[ScannedDevice] = []
+        options: dict[str, str] = {}
         state.status = "Scanning HT..."
         refresh_ui()
-        devices = await controller.scan()
-        options = {f"{d.name} ({d.address})": d.address for d in devices}
-        ht_device_select.options = options
-        if options:
-            selected_device_address = next(iter(options.values()))
-            ht_device_select.value = selected_device_address
-        state.status = f"HT scan done: {len(devices)} devices"
+        try:
+            devices = await controller.scan()
+            ftms_devices = _ht_candidates(devices)
+            source = ftms_devices if ftms_devices else devices
+            # NiceGUI select expects value->label mapping for dict options.
+            options = {d.address: _fmt_device_label(d) for d in source}
+            ht_device_select.options = options
+            if ftms_devices:
+                state.status = f"HT scan done: {len(ftms_devices)} trainer(s) found"
+            elif devices:
+                state.status = (
+                    f"HT scan done: {len(devices)} BLE device(s), no FTMS trainer detected"
+                )
+            else:
+                state.status = "HT scan done: no BLE devices"
+            if options:
+                if selected_device_address in options:
+                    ht_device_select.value = selected_device_address
+                elif len(ftms_devices) == 1:
+                    selected_device_address = ftms_devices[0].address
+                    ht_device_select.value = selected_device_address
+                elif len(options) == 1:
+                    selected_device_address = next(iter(options.keys()))
+                    ht_device_select.value = selected_device_address
+                else:
+                    selected_device_address = None
+                    ht_device_select.value = None
+        except Exception as exc:
+            state.status = f"HT scan failed: {exc}"
+            selected_device_address = None
+        state.ht_busy = False
         refresh_ui()
+        if (
+            auto_connect
+            and not state.connected
+            and selected_device_address is not None
+            and (len(ftms_devices) == 1 or len(options) == 1)
+        ):
+            await on_connect_ht()
 
     async def on_connect_ht() -> None:
         nonlocal selected_device_address
+        if state.connected or state.ht_busy:
+            return
         selected_device_address = cast(str | None, ht_device_select.value)
         if not selected_device_address:
             state.status = "Select an HT device first"
             refresh_ui()
             return
+        state.ht_busy = True
+        state.erg_ready = None
         state.status = "Connecting HT..."
         refresh_ui()
-        label = await controller.connect(
-            target=selected_device_address,
-            metrics_callback=on_metrics,
-        )
-        state.connected = True
-        state.status = f"HT connected: {label}"
+        last_error: Exception | None = None
+        for attempt in range(2):
+            try:
+                label = await asyncio.wait_for(
+                    controller.connect(
+                        target=selected_device_address,
+                        metrics_callback=on_metrics,
+                        connect_timeout=HT_CONNECT_TIMEOUT_SEC,
+                    ),
+                    timeout=HT_CONNECT_TIMEOUT_SEC + 5.0,
+                )
+            except Exception as exc:
+                last_error = exc
+                if attempt == 0:
+                    state.status = (
+                        "Connecting HT... retrying automatically "
+                        "(refreshing BLE discovery)"
+                    )
+                    refresh_ui()
+                    devices = await controller.scan()
+                    ftms_devices = _ht_candidates(devices)
+                    source = ftms_devices if ftms_devices else devices
+                    options = {d.address: _fmt_device_label(d) for d in source}
+                    ht_device_select.options = options
+                    if options:
+                        selected_device_address = (
+                            selected_device_address
+                            if selected_device_address in options
+                            else next(iter(options.keys()))
+                        )
+                        ht_device_select.value = selected_device_address
+                    await asyncio.sleep(0.2)
+                    continue
+            else:
+                erg_ok = await asyncio.wait_for(
+                    controller.probe_erg_support(),
+                    timeout=8.0,
+                )
+                metrics_ok = controller.measurement_stream_ready
+                state.connected = True
+                state.ht_device_name = label
+                state.erg_ready = erg_ok
+                metrics_part = "metrics ready" if metrics_ok else "metrics pending"
+                state.status = (
+                    f"HT connected: {label} | ERG {'ready' if erg_ok else 'not ready'} | "
+                    f"{metrics_part}"
+                )
+                state.ht_busy = False
+                refresh_ui()
+                return
+
+        state.connected = False
+        state.ht_device_name = None
+        state.erg_ready = None
+        if isinstance(last_error, TimeoutError):
+            state.status = (
+                f"HT connect timeout ({int(HT_CONNECT_TIMEOUT_SEC)}s x2). "
+                "Trainer may need a short wake-up spin."
+            )
+        else:
+            detail = str(last_error) if last_error else "Unknown error"
+            if "No FTMS device found" in detail:
+                detail = (
+                    "No FTMS device found (trainer on, but BLE service not visible). "
+                    "Auto-retry done; a short pedal wake-up may still be required "
+                    "on some models."
+                )
+            state.status = f"HT connect failed: {detail}"
+        state.ht_busy = False
         refresh_ui()
 
     async def on_disconnect_ht() -> None:
+        if state.ht_busy:
+            return
+        state.ht_busy = True
         await controller.disconnect()
         state.connected = False
+        state.ht_device_name = None
+        state.erg_ready = None
+        state.ht_busy = False
         state.status = "HT disconnected"
         refresh_ui()
 
@@ -2111,6 +2262,7 @@ def run_web_ui(
         else:
             state.hm_connected = False
             state.heart_rate_bpm = None
+            state.hm_device_name = None
             state.status = "HM not detected"
         refresh_ui()
 
@@ -2120,12 +2272,14 @@ def run_web_ui(
             refresh_ui()
             return
         state.hm_connected = True
+        state.hm_device_name = "Sim HM"
         state.status = "HM connected"
         refresh_ui()
 
     def on_disconnect_hm() -> None:
         state.hm_connected = False
         state.heart_rate_bpm = None
+        state.hm_device_name = None
         state.status = "HM disconnected"
         refresh_ui()
 
@@ -2449,9 +2603,11 @@ def run_web_ui(
         refresh_templates()
         refresh_ui()
 
-    def on_open_connections() -> None:
+    async def on_open_connections() -> None:
         show_connections_screen()
         refresh_ui()
+        if not state.connected:
+            await on_scan_ht(auto_connect=True)
 
     def on_back_to_training_setup() -> None:
         show_setup_screen()

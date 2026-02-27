@@ -33,6 +33,45 @@ except ImportError:  # pragma: no cover - runtime dependency guard
 
 MetricsCallback = Callable[["IndoorBikeData"], Awaitable[None] | None]
 
+_BLE_COMPANY_IDS: dict[int, str] = {
+    0x004C: "Apple",
+    0x0006: "Microsoft",
+    0x000F: "Broadcom",
+    0x0075: "Samsung",
+    0x0087: "Garmin",
+    0x00D2: "Wahoo Fitness",
+    0x011F: "Tacx",
+    0x04D8: "Elite",
+}
+
+_BRAND_HINTS: tuple[tuple[str, str], ...] = (
+    ("wahoo", "Wahoo Fitness"),
+    ("kicker", "Wahoo Fitness"),
+    ("kickr", "Wahoo Fitness"),
+    ("elite", "Elite"),
+    ("direto", "Elite"),
+    ("suito", "Elite"),
+    ("tacx", "Tacx"),
+    ("garmin", "Garmin"),
+    ("saris", "Saris"),
+    ("stages", "Stages"),
+    ("zwift", "Zwift"),
+)
+
+
+def _resolve_manufacturer(
+    name: str, manufacturer_data: Any | None
+) -> str | None:
+    if isinstance(manufacturer_data, dict) and manufacturer_data:
+        for key in sorted(manufacturer_data.keys()):
+            if isinstance(key, int):
+                return _BLE_COMPANY_IDS.get(key, f"MFG 0x{key:04X}")
+    lowered = name.lower()
+    for hint, brand in _BRAND_HINTS:
+        if hint in lowered:
+            return brand
+    return None
+
 
 @dataclass(frozen=True)
 class ScannedDevice:
@@ -40,6 +79,7 @@ class ScannedDevice:
     address: str
     rssi: int
     has_ftms: bool
+    manufacturer: str | None = None
 
 
 @dataclass(frozen=True)
@@ -202,12 +242,16 @@ class FTMSClient:
     """Thin async BLE FTMS client with scan/connect/subscribe/control operations."""
 
     def __init__(
-        self, debug_ftms: bool = False, simulate_ht: bool = False
+        self,
+        debug_ftms: bool = False,
+        simulate_ht: bool = False,
+        ble_pair: bool = True,
     ) -> None:
         self._client: Optional[Any] = None
         self._metrics_callback: Optional[MetricsCallback] = None
         self._debug_ftms = debug_ftms
         self._simulate_ht = simulate_ht
+        self._ble_pair = ble_pair
         self._last_ftms_power: Optional[int] = None
         self._last_ftms_cadence: Optional[float] = None
         self._last_ftms_speed: Optional[float] = None
@@ -227,6 +271,8 @@ class FTMSClient:
         self._sim_tick = 0
         self._sim_mode: str = "steady"
         self._sim_mode_remaining = 0
+        self._scan_cache: dict[str, Any] = {}
+        self._services_discovered = False
 
     @property
     def is_connected(self) -> bool:
@@ -242,6 +288,7 @@ class FTMSClient:
                     address="SIM:HT:00:00:00:01",
                     rssi=-30,
                     has_ftms=True,
+                    manufacturer="Velox",
                 )
             ]
         _ensure_bleak_available()
@@ -249,23 +296,30 @@ class FTMSClient:
             timeout=timeout, return_adv=True
         )
         devices: list[ScannedDevice] = []
+        self._scan_cache = {}
 
         for _, (device, adv_data) in discovered.items():
             uuids = {u.lower() for u in (adv_data.service_uuids or [])}
             has_ftms = FTMS_SERVICE_UUID in uuids
+            self._scan_cache[device.address.lower()] = device
+            manufacturer = _resolve_manufacturer(
+                device.name or "",
+                getattr(adv_data, "manufacturer_data", None),
+            )
             devices.append(
                 ScannedDevice(
                     name=device.name or "Unknown",
                     address=device.address,
                     rssi=adv_data.rssi,
                     has_ftms=has_ftms,
+                    manufacturer=manufacturer,
                 )
             )
 
         devices.sort(key=lambda d: d.rssi, reverse=True)
         return devices
 
-    async def connect(self, target: Optional[str] = None, timeout: float = 10.0) -> str:
+    async def connect(self, target: Optional[str] = None, timeout: float = 25.0) -> str:
         """Connect to a specific BLE address/name, or the first FTMS capable device."""
         if self._simulate_ht:
             self._sim_connected = True
@@ -274,14 +328,40 @@ class FTMSClient:
         _ensure_bleak_available()
 
         device = await self._resolve_device(target=target, timeout=timeout)
+        # Fallback: some trainers are powered on but not advertising continuously.
+        # BleakClient accepts direct address string with BlueZ on Linux.
+        if device is None and target and target != "auto":
+            device = target
         if device is None:
             raise RuntimeError("No FTMS device found")
 
-        client = _bleak.BleakClient(device)
-        await client.connect(timeout=timeout)
+        client = self._build_bleak_client(device, pair=self._ble_pair)
+        try:
+            await client.connect(timeout=timeout)
+        except Exception:
+            # Some platforms/backends/devices don't support pairing from API.
+            # Retry transparently without the pairing request.
+            if not self._ble_pair:
+                raise
+            with contextlib.suppress(Exception):
+                await client.disconnect()
+            client = self._build_bleak_client(device, pair=False)
+            await client.connect(timeout=timeout)
         self._client = client
+        await self._ensure_services_discovered()
 
+        if isinstance(device, str):
+            return f"Unknown ({device})"
         return f"{device.name or 'Unknown'} ({device.address})"
+
+    def _build_bleak_client(self, device: Any, *, pair: bool) -> Any:
+        if pair:
+            try:
+                return _bleak.BleakClient(device, pair=True)
+            except TypeError:
+                if self._debug_ftms:
+                    print("[BLE] pair=True unsupported by current backend, using plain connect")
+        return _bleak.BleakClient(device)
 
     async def disconnect(self) -> None:
         if self._simulate_ht:
@@ -296,6 +376,7 @@ class FTMSClient:
         if self._client:
             await self._client.disconnect()
             self._client = None
+            self._services_discovered = False
 
     async def subscribe_indoor_bike_data(self, callback: MetricsCallback) -> None:
         if self._simulate_ht:
@@ -309,21 +390,39 @@ class FTMSClient:
         if not self._client:
             raise RuntimeError("Not connected")
 
+        await self._ensure_services_discovered()
         self._metrics_callback = callback
-        await self._client.start_notify(
-            INDOOR_BIKE_DATA_CHAR_UUID,
-            self._handle_indoor_bike_data_notification,
-        )
+        subscribed_any = False
+
+        try:
+            await self._client.start_notify(
+                INDOOR_BIKE_DATA_CHAR_UUID,
+                self._handle_indoor_bike_data_notification,
+            )
+            subscribed_any = True
+            if self._debug_ftms:
+                print("[FTMS] subscribed to Indoor Bike Data (0x2AD2)")
+        except Exception as exc:  # pragma: no cover - optional BLE characteristic
+            if self._debug_ftms:
+                print(f"[FTMS] Indoor Bike Data unavailable: {exc}")
+
         try:
             await self._client.start_notify(
                 CYCLING_POWER_MEASUREMENT_CHAR_UUID,
                 self._handle_cycling_power_measurement_notification,
             )
+            subscribed_any = True
             if self._debug_ftms:
                 print("[CPM] subscribed to Cycling Power Measurement (0x2A63)")
         except Exception as exc:  # pragma: no cover - optional BLE characteristic
             if self._debug_ftms:
                 print(f"[CPM] unavailable: {exc}")
+
+        if not subscribed_any:
+            raise RuntimeError(
+                "No compatible measurement characteristic found "
+                "(expected 0x2AD2 and/or 0x2A63)"
+            )
 
     async def set_target_power(self, watts: int) -> int:
         """Set fixed ERG target power through FTMS Control Point."""
@@ -338,6 +437,7 @@ class FTMSClient:
         if not self._client:
             raise RuntimeError("Not connected")
 
+        await self._ensure_services_discovered()
         await self._ensure_control_point_indications()
         target_watts = await self._normalize_target_power(watts)
         request_control = bytes([OP_REQUEST_CONTROL])
@@ -368,6 +468,25 @@ class FTMSClient:
         raise RuntimeError(
             f"Unable to set ERG target to {target_watts}W via FTMS Control Point"
         ) from errors[-1]
+
+    async def probe_erg_support(self) -> bool:
+        """Best-effort check that FTMS control point accepts ERG control commands."""
+        if self._simulate_ht:
+            return True
+        if not self._client:
+            return False
+
+        try:
+            await self._ensure_services_discovered()
+            await self._ensure_control_point_indications()
+            await self._client.write_gatt_char(
+                FITNESS_MACHINE_CONTROL_POINT_CHAR_UUID,
+                bytes([OP_REQUEST_CONTROL]),
+                response=True,
+            )
+            return True
+        except Exception:  # pragma: no cover - BLE runtime variability
+            return False
 
     async def set_target_resistance(self, level: float) -> float:
         if self._simulate_ht:
@@ -404,6 +523,7 @@ class FTMSClient:
     async def _ensure_control_point_indications(self) -> None:
         if not self._client:
             return
+        await self._ensure_services_discovered()
         if self._control_point_indications_enabled:
             return
         try:
@@ -463,6 +583,19 @@ class FTMSClient:
         if not self._client:
             return None
 
+    async def _ensure_services_discovered(self) -> None:
+        if self._simulate_ht:
+            return
+        if not self._client:
+            return
+        if self._services_discovered:
+            return
+        if hasattr(self._client, "get_services"):
+            await self._client.get_services()
+        else:
+            _ = self._client.services
+        self._services_discovered = True
+
         try:
             raw = bytes(
                 await self._client.read_gatt_char(SUPPORTED_POWER_RANGE_CHAR_UUID)
@@ -493,6 +626,9 @@ class FTMSClient:
         self, target: Optional[str], timeout: float
     ) -> Optional[Any]:
         if target and target != "auto":
+            cached = self._scan_cache.get(target.lower())
+            if cached is not None:
+                return cached
             device = await _bleak.BleakScanner.find_device_by_filter(
                 lambda d, _: (d.address.lower() == target.lower())
                 or ((d.name or "").lower() == target.lower()),

@@ -15,11 +15,13 @@ class VeloxEngine:
         ftms_client: FTMSClient | None = None,
         debug_ftms: bool = False,
         simulate_ht: bool = False,
+        ble_pair: bool = True,
         startup_wait_seconds: float = 30.0,
     ) -> None:
         self._client = ftms_client or FTMSClient(
             debug_ftms=debug_ftms,
             simulate_ht=simulate_ht,
+            ble_pair=ble_pair,
         )
         self.state = EngineState()
         self._stop_event = asyncio.Event()
