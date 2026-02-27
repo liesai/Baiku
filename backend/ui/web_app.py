@@ -219,6 +219,24 @@ def run_web_ui(
             color: #facc15;
             text-shadow: 0 0 10px rgba(250, 204, 21, 0.6);
           }
+          .dmd-shell {
+            border: 1px solid rgba(250, 204, 21, 0.35);
+            border-radius: 12px;
+            background: linear-gradient(180deg, #190e06 0%, #100702 100%);
+            padding: 8px;
+            box-shadow:
+              inset 0 0 0 1px rgba(255, 181, 41, 0.16),
+              inset 0 0 30px rgba(255, 120, 0, 0.14),
+              0 8px 18px rgba(2, 6, 23, 0.42);
+          }
+          .dmd-screen {
+            width: 100%;
+            height: 88px;
+            border-radius: 8px;
+            background: #090303;
+            display: block;
+            image-rendering: pixelated;
+          }
           .gb-pixel {
             font-family: "Courier New", monospace;
             font-weight: 700;
@@ -513,6 +531,97 @@ def run_web_ui(
               window.setTimeout(() => window.veloxPinballFx(kind, label), delay);
             });
           };
+          window.veloxDmd = (function() {
+            let canvas = null;
+            let ctx = null;
+            let ticker = '';
+            let flash = '';
+            let flashKind = 'bonus';
+            let flashUntil = 0;
+            const off = document.createElement('canvas');
+            off.width = 128;
+            off.height = 32;
+            const octx = off.getContext('2d', { alpha: false });
+
+            function colors(kind) {
+              if (kind === 'jackpot') return ['#2b0900', '#ff8800', '#ffd24d'];
+              if (kind === 'multi') return ['#180a2a', '#c188ff', '#f0d9ff'];
+              return ['#240900', '#ff9f1c', '#ffd166'];
+            }
+
+            function drawDotGrid(base, glow, hot) {
+              if (!ctx || !canvas) return;
+              const w = canvas.width;
+              const h = canvas.height;
+              const cols = 128;
+              const rows = 32;
+              const cw = w / cols;
+              const ch = h / rows;
+              ctx.fillStyle = '#050202';
+              ctx.fillRect(0, 0, w, h);
+              for (let y = 0; y < rows; y += 1) {
+                for (let x = 0; x < cols; x += 1) {
+                  const px = (x + 0.5) * cw;
+                  const py = (y + 0.5) * ch;
+                  const lit = octx.getImageData(x, y, 1, 1).data[0] > 32;
+                  ctx.fillStyle = lit ? glow : base;
+                  ctx.beginPath();
+                  ctx.arc(px, py, Math.min(cw, ch) * (lit ? 0.34 : 0.23), 0, Math.PI * 2);
+                  ctx.fill();
+                  if (lit) {
+                    ctx.fillStyle = hot;
+                    ctx.beginPath();
+                    ctx.arc(px, py, Math.min(cw, ch) * 0.14, 0, Math.PI * 2);
+                    ctx.fill();
+                  }
+                }
+              }
+            }
+
+            function render() {
+              if (!ctx || !canvas) return;
+              const now = Date.now();
+              const kind = flashUntil > now ? flashKind : 'bonus';
+              const colorset = colors(kind);
+              octx.fillStyle = '#000';
+              octx.fillRect(0, 0, off.width, off.height);
+              octx.fillStyle = '#fff';
+              octx.font = 'bold 13px monospace';
+              octx.textAlign = 'center';
+              octx.textBaseline = 'middle';
+              const msg = flashUntil > now ? flash : ticker;
+              octx.fillText(msg || 'VELOX PINBALL READY', 64, 12);
+              octx.font = 'bold 10px monospace';
+              octx.fillText('TRACK  COMPETE  WIN', 64, 24);
+              drawDotGrid(colorset[0], colorset[1], colorset[2]);
+              requestAnimationFrame(render);
+            }
+
+            return {
+              init: function() {
+                canvas = document.getElementById('ve-dmd');
+                if (!canvas) return;
+                ctx = canvas.getContext('2d', { alpha: false });
+                const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+                const rect = canvas.getBoundingClientRect();
+                canvas.width = Math.floor(rect.width * dpr);
+                canvas.height = Math.floor(rect.height * dpr);
+                if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                if (!window.__velox_dmd_started) {
+                  window.__velox_dmd_started = true;
+                  requestAnimationFrame(render);
+                }
+              },
+              ticker: function(msg) {
+                ticker = String(msg || '').slice(0, 36);
+              },
+              flash: function(msg, kind) {
+                flash = String(msg || '').slice(0, 24);
+                flashKind = kind || 'bonus';
+                flashUntil = Date.now() + 1200;
+              },
+            };
+          })();
         </script>
         """
         .replace("__SPRITE_URL__", SPRITE_URL)
@@ -649,6 +758,15 @@ def run_web_ui(
             pinball_jackpot_label = ui.label("JACKPOT 0").classes("pinball-chip pinball-jackpot")
             pinball_reward_label = ui.label("BONUS READY").classes("pinball-chip")
         pinball_hud_row.set_visibility(pinball_mode)
+
+        pinball_dmd = ui.html(
+            """
+            <div class="dmd-shell">
+              <canvas id="ve-dmd" class="dmd-screen"></canvas>
+            </div>
+            """
+        ).classes("w-full")
+        pinball_dmd.set_visibility(pinball_mode)
 
         with ui.row().classes("w-full gap-2") as pinball_sim_row:
             ui.label("Sim Pinball").classes("pinball-chip")
@@ -1054,6 +1172,7 @@ def run_web_ui(
             pinball_multiplier = min(8, pinball_multiplier + 1)
             pinball_last_bonus = f"+{reward} MULTI"
             _safe_run_js(f"window.veloxPinballFx('multi', 'MULTI +{reward}');")
+            _safe_run_js(f"window.veloxDmd.flash('MULTI +{reward}', 'multi');")
             return
         if kind == "jackpot":
             if not manual and (now_ts - pinball_last_jackpot_ts) < 6.0:
@@ -1064,11 +1183,13 @@ def run_web_ui(
             pinball_last_bonus = f"JACKPOT +{reward}"
             pinball_last_jackpot_ts = now_ts
             _safe_run_js(f"window.veloxPinballFx('jackpot', 'JACKPOT +{reward}');")
+            _safe_run_js(f"window.veloxDmd.flash('JACKPOT +{reward}', 'jackpot');")
             return
         reward = 60 * pinball_multiplier
         pinball_score_bonus += reward
         pinball_last_bonus = f"+{reward} BONUS"
         _safe_run_js(f"window.veloxPinballFx('bonus', 'BONUS +{reward}');")
+        _safe_run_js(f"window.veloxDmd.flash('BONUS +{reward}', 'bonus');")
 
     def trigger_pinball_pattern(name: str) -> None:
         if not pinball_mode:
@@ -1084,6 +1205,8 @@ def run_web_ui(
         setup_header.set_visibility(False)
         setup_view.set_visibility(False)
         workout_view.set_visibility(True)
+        if pinball_mode:
+            _safe_run_js("window.veloxDmd.init();")
 
     def rebuild_workout_options() -> None:
         nonlocal workout_options, workout_option_by_label, workout_option_labels
@@ -1313,6 +1436,14 @@ def run_web_ui(
             pinball_multiplier_label.text = f"MULTI x{pinball_multiplier}"
             pinball_jackpot_label.text = f"JACKPOT {pinball_jackpots}"
             pinball_reward_label.text = f"BONUS {pinball_last_bonus}"
+            step_txt = "-"
+            if state.progress is not None:
+                step_txt = f"{state.progress.step_index}/{state.progress.step_total}"
+            dmd_msg = (
+                f"S{shown_score} Mx{pinball_multiplier} J{pinball_jackpots} "
+                f"STEP {step_txt}"
+            )
+            _safe_run_js(f"window.veloxDmd.ticker('{dmd_msg}');")
 
         expected_power_min = None
         expected_power_max = None
