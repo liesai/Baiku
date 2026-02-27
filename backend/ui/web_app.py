@@ -831,6 +831,7 @@ def run_web_ui(
     pinball_last_jackpot_ts = 0.0
     last_encourage_bucket: int | None = None
     analytics_demo_mode = False
+    analytics_window = 7
 
     timeline_labels: list[str] = []
     timeline_expected_power: list[int] = []
@@ -929,6 +930,11 @@ def run_web_ui(
         with ui.card().classes("w-full gb-card gb-compact"):
             with ui.row().classes("w-full items-center gap-2"):
                 analytics_demo_switch = ui.switch("Analytics demo (sample data)", value=False)
+                analytics_window_select = ui.select(
+                    {7: "Last 7", 30: "Last 30"},
+                    value=7,
+                    label="Window",
+                ).classes("min-w-[140px]")
             with ui.grid().classes("w-full grid-cols-2 md:grid-cols-4 gap-2"):
                 analytics_sessions = ui.label("Sessions: 0").classes("text-sm")
                 analytics_completed = ui.label("Completion: -").classes("text-sm")
@@ -938,6 +944,63 @@ def run_web_ui(
                 analytics_power = ui.label("Avg power: -").classes("text-sm")
                 analytics_cadence = ui.label("Avg cadence: -").classes("text-sm")
                 analytics_speed = ui.label("Avg speed: -").classes("text-sm")
+            analytics_trend_chart = ui.echart(
+                {
+                    "title": {
+                        "text": "Trends (sessions)",
+                        "left": "center",
+                        "textStyle": {
+                            "color": "#ffffff",
+                            "fontWeight": "bold",
+                            "fontFamily": "Arial",
+                        },
+                    },
+                    "tooltip": {"trigger": "axis"},
+                    "legend": {
+                        "data": ["Compliance %", "Avg Power (W)"],
+                        "top": 26,
+                        "textStyle": {"color": "#ffffff"},
+                    },
+                    "xAxis": {"type": "category", "data": [], "axisLabel": {"color": "#ffffff"}},
+                    "yAxis": [
+                        {
+                            "type": "value",
+                            "name": "%",
+                            "axisLabel": {"color": "#ffffff"},
+                            "nameTextStyle": {"color": "#ffffff"},
+                            "min": 0,
+                            "max": 100,
+                        },
+                        {
+                            "type": "value",
+                            "name": "W",
+                            "axisLabel": {"color": "#ffffff"},
+                            "nameTextStyle": {"color": "#ffffff"},
+                        },
+                    ],
+                    "series": [
+                        {
+                            "name": "Compliance %",
+                            "type": "line",
+                            "data": [],
+                            "showSymbol": True,
+                            "itemStyle": {"color": "#22d3ee"},
+                            "lineStyle": {"width": 2},
+                        },
+                        {
+                            "name": "Avg Power (W)",
+                            "type": "line",
+                            "yAxisIndex": 1,
+                            "data": [],
+                            "showSymbol": True,
+                            "itemStyle": {"color": "#7ddc74"},
+                            "lineStyle": {"width": 2},
+                        },
+                    ],
+                    "grid": {"left": 42, "right": 48, "top": 62, "bottom": 34},
+                    "animation": False,
+                }
+            ).classes("w-full h-56")
 
     with ui.column().classes("w-full gap-2") as workout_view:
         with ui.row().classes("w-full items-center justify-between"):
@@ -1625,6 +1688,23 @@ def run_web_ui(
             f"Avg speed: {avg_speed:.1f} km/h" if avg_speed is not None else "Avg speed: -"
         )
 
+        # Trend chart (oldest -> newest) based on selected session window.
+        windowed = list(reversed(sessions[: max(1, analytics_window)]))
+        labels: list[str] = []
+        compliance_points: list[float | None] = []
+        power_points: list[float | None] = []
+        for idx, s in enumerate(windowed, start=1):
+            date_hint = s.ended_at_utc[:10]
+            labels.append(f"{idx}|{date_hint}")
+            compliance_points.append(s.both_compliance_pct)
+            power_points.append(s.avg_power_watts)
+
+        trend_opts = cast(dict[str, Any], analytics_trend_chart.options)
+        trend_opts["xAxis"]["data"] = labels
+        trend_opts["series"][0]["data"] = compliance_points
+        trend_opts["series"][1]["data"] = power_points
+        analytics_trend_chart.update()
+
     def refresh_plan_chart() -> None:
         if plan_chart is None:
             return
@@ -2246,6 +2326,11 @@ def run_web_ui(
         refresh_history()
         refresh_ui()
 
+    def on_analytics_window_change() -> None:
+        nonlocal analytics_window
+        analytics_window = int(analytics_window_select.value or 7)
+        refresh_history()
+
     band_select.on_value_change(lambda _: refresh_templates())
     ftp_input.on_value_change(lambda _: on_ftp_or_mode_change())
     mode_select.on_value_change(lambda _: on_ftp_or_mode_change())
@@ -2253,6 +2338,7 @@ def run_web_ui(
     preset_select.on_value_change(lambda _: on_preset_change())
     sound_toggle.on_value_change(lambda _: on_sound_toggle())
     analytics_demo_switch.on_value_change(lambda _: on_analytics_demo_toggle())
+    analytics_window_select.on_value_change(lambda _: on_analytics_window_change())
     scan_btn.on_click(on_scan)
     connect_btn.on_click(on_connect)
     disconnect_btn.on_click(on_disconnect)
