@@ -645,6 +645,62 @@ def run_web_ui(
               },
             };
           })();
+          window.veloxCspSafeUiLoop = function() {
+            if (window.__velox_csp_loop_started) return;
+            window.__velox_csp_loop_started = true;
+            let lastReward = '';
+            let dmdInitDone = false;
+            const parseVal = (id) => {
+              const el = document.getElementById(id);
+              if (!el) return 0;
+              const m = String(el.textContent || '').replace(',', '.').match(/-?\\d+(?:\\.\\d+)?/);
+              return m ? Number(m[0]) : 0;
+            };
+            const textOf = (id) => {
+              const el = document.getElementById(id);
+              return String(el ? (el.textContent || '') : '').trim();
+            };
+            window.setInterval(() => {
+              if (!dmdInitDone) {
+                window.veloxDmd.init();
+                dmdInitDone = true;
+              }
+              const speed = parseVal('ve-kpi-speed');
+              const cadence = parseVal('ve-kpi-cadence');
+              const guidance = textOf('ve-guidance');
+              let action = 'steady';
+              let inZone = true;
+              if (/Accelere|Augmente/i.test(guidance)) {
+                action = 'up';
+                inZone = false;
+              } else if (/Reduis|Baisse/i.test(guidance)) {
+                action = 'down';
+                inZone = false;
+              } else if (/Action:\\s*-/i.test(guidance)) {
+                inZone = false;
+              }
+              window.veloxUpdateScene(speed, cadence, inZone, action);
+
+              const score = textOf('ve-score');
+              const multi = textOf('ve-pinball-multi');
+              const jackpot = textOf('ve-pinball-jackpot');
+              const step = textOf('ve-step-info');
+              window.veloxDmd.ticker(`${score}  ${multi}  ${jackpot}  ${step}`.slice(0, 24));
+
+              const reward = textOf('ve-pinball-reward');
+              if (reward && reward !== lastReward && !/READY/i.test(reward)) {
+                let kind = 'bonus';
+                if (/JACKPOT/i.test(reward)) kind = 'jackpot';
+                else if (/MULTI/i.test(reward)) kind = 'multi';
+                window.veloxPinballFx(kind, reward.slice(0, 20));
+                window.veloxDmd.flash(reward.slice(0, 22), kind);
+                lastReward = reward;
+              }
+            }, 260);
+          };
+          window.addEventListener('DOMContentLoaded', () => {
+            window.veloxCspSafeUiLoop();
+          });
         </script>
         """
         .replace("__SPRITE_URL__", SPRITE_URL)
@@ -794,9 +850,15 @@ def run_web_ui(
             if csp_safe_mode:
                 ui.label("CSP-SAFE").classes("pinball-chip")
             pinball_mission_label = ui.label("MISSION: Keep target zone").classes("pinball-chip")
-            pinball_multiplier_label = ui.label("MULTI x1").classes("pinball-chip")
-            pinball_jackpot_label = ui.label("JACKPOT 0").classes("pinball-chip pinball-jackpot")
-            pinball_reward_label = ui.label("BONUS READY").classes("pinball-chip")
+            pinball_multiplier_label = ui.label("MULTI x1").classes("pinball-chip").props(
+                "id=ve-pinball-multi"
+            )
+            pinball_jackpot_label = ui.label("JACKPOT 0").classes(
+                "pinball-chip pinball-jackpot"
+            ).props("id=ve-pinball-jackpot")
+            pinball_reward_label = ui.label("BONUS READY").classes("pinball-chip").props(
+                "id=ve-pinball-reward"
+            )
         pinball_hud_row.set_visibility(pinball_mode)
 
         pinball_dmd = ui.html(
@@ -824,7 +886,7 @@ def run_web_ui(
                     workout_info = ui.label("No workout loaded").classes(
                         "text-sm font-semibold"
                     )
-                    step_info = ui.label("Step: -").classes("text-sm")
+                    step_info = ui.label("Step: -").classes("text-sm").props("id=ve-step-info")
                     elapsed_label = ui.label("Elapsed: 00:00").classes("text-sm")
                     remaining_label = ui.label("Remaining: 00:00").classes("text-sm")
                     compliance_info = ui.label("Compliance: -").classes("text-sm")
@@ -834,25 +896,29 @@ def run_web_ui(
                     mode_label = ui.label("Mode: ERG").classes("text-sm gb-muted")
                     sound_toggle = ui.switch("Sound alerts", value=True).classes("text-sm")
                 with ui.row().classes("w-full items-center gap-3"):
-                    guidance_label = ui.label("Action: -").classes("text-sm font-semibold")
+                    guidance_label = ui.label("Action: -").classes(
+                        "text-sm font-semibold"
+                    ).props("id=ve-guidance")
 
         with ui.grid().classes("w-full grid-cols-1 md:grid-cols-4 gap-2"):
             with ui.card().classes("w-full gb-kpi gb-compact"):
                 ui.label("Power").classes("text-xs gb-title-neutral")
-                kpi_power = ui.label("-- W").classes("gb-number")
+                kpi_power = ui.label("-- W").classes("gb-number").props("id=ve-kpi-power")
             with ui.card().classes("w-full gb-kpi gb-compact"):
                 ui.label("Cadence").classes("text-xs gb-title-neutral")
-                kpi_cadence = ui.label("-- rpm").classes("gb-number")
+                kpi_cadence = ui.label("-- rpm").classes("gb-number").props("id=ve-kpi-cadence")
             with ui.card().classes("w-full gb-kpi gb-compact"):
                 ui.label("Speed").classes("text-xs gb-title-neutral")
-                kpi_speed = ui.label("-- km/h").classes("gb-number")
+                kpi_speed = ui.label("-- km/h").classes("gb-number").props("id=ve-kpi-speed")
             with ui.card().classes("w-full gb-kpi gb-compact"):
                 ui.label("Distance").classes("text-xs gb-title-neutral")
                 kpi_distance = ui.label("0,00 km").classes("gb-number")
 
         with ui.card().classes("w-full gb-card gb-compact"):
             with ui.row().classes("w-full items-center justify-between gap-3 flex-wrap"):
-                game_score_label = ui.label("Score: 0").classes("text-sm gb-pixel")
+                game_score_label = ui.label("Score: 0").classes("text-sm gb-pixel").props(
+                    "id=ve-score"
+                )
                 game_coins_label = ui.label("Coins: 0").classes("text-sm gb-pixel")
                 game_streak_label = ui.label("Streak: 0").classes("text-sm gb-pixel")
                 game_goal_label = ui.label("Goal: -").classes("text-xs gb-pixel")
