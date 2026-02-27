@@ -544,7 +544,7 @@ def run_web_ui(
             const off = document.createElement('canvas');
             off.width = 192;
             off.height = 64;
-            const octx = off.getContext('2d', { alpha: false });
+            const octx = off.getContext('2d');
 
             function colors(kind) {
               if (kind === 'jackpot') return ['#2b0900', '#ff8800', '#ffd24d'];
@@ -553,7 +553,7 @@ def run_web_ui(
             }
 
             function drawDotGrid(base, glow, hot) {
-              if (!ctx || !canvas) return;
+              if (!ctx || !canvas || !octx) return;
               const w = canvas.width;
               const h = canvas.height;
               const cols = off.width;
@@ -584,7 +584,7 @@ def run_web_ui(
             }
 
             function render() {
-              if (!ctx || !canvas) return;
+              if (!ctx || !canvas || !octx) return;
               const now = Date.now();
               const kind = flashUntil > now ? flashKind : 'bonus';
               const colorset = colors(kind);
@@ -611,7 +611,7 @@ def run_web_ui(
               init: function() {
                 canvas = document.getElementById('ve-dmd');
                 if (!canvas) return;
-                ctx = canvas.getContext('2d', { alpha: false });
+                ctx = canvas.getContext('2d');
                 const rect = canvas.getBoundingClientRect();
                 canvas.width = Math.max(320, Math.floor(rect.width));
                 canvas.height = Math.max(88, Math.floor(rect.height));
@@ -1443,6 +1443,7 @@ def run_web_ui(
                     f"[{int(current_goal.progress_sec)}/{int(current_goal.definition.target_sec)}s]"
                 )
         if pinball_mode:
+            _safe_run_js("window.veloxDmd.init();")
             pinball_multiplier_label.text = f"MULTI x{pinball_multiplier}"
             pinball_jackpot_label.text = f"JACKPOT {pinball_jackpots}"
             pinball_reward_label.text = f"BONUS {pinball_last_bonus}"
