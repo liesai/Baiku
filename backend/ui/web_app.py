@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 import os
 from pathlib import Path
 import time
@@ -829,6 +830,7 @@ def run_web_ui(
     pinball_last_step_seen = 0
     pinball_last_jackpot_ts = 0.0
     last_encourage_bucket: int | None = None
+    analytics_demo_mode = False
 
     timeline_labels: list[str] = []
     timeline_expected_power: list[int] = []
@@ -925,6 +927,8 @@ def run_web_ui(
 
         ui.label("Analytics").classes("text-base font-medium")
         with ui.card().classes("w-full gb-card gb-compact"):
+            with ui.row().classes("w-full items-center gap-2"):
+                analytics_demo_switch = ui.switch("Analytics demo (sample data)", value=False)
             with ui.grid().classes("w-full grid-cols-2 md:grid-cols-4 gap-2"):
                 analytics_sessions = ui.label("Sessions: 0").classes("text-sm")
                 analytics_completed = ui.label("Completion: -").classes("text-sm")
@@ -1510,8 +1514,56 @@ def run_web_ui(
                     card.on("click", on_pick)
 
     def refresh_history() -> None:
+        def demo_sessions() -> list[SessionRecord]:
+            now = datetime.now(tz=timezone.utc)
+            out: list[SessionRecord] = []
+            seeds = [
+                ("FTP Builder 2x8", 34 * 60, 210.0, 86.0, 31.5, 92.0, 88.0, 84.0, True),
+                ("VO2 Burst 5x3", 42 * 60, 238.0, 91.0, 33.2, 85.0, 82.0, 77.0, True),
+                ("Tempo 45", 45 * 60, 196.0, 83.5, 30.1, 90.0, 86.0, 83.0, True),
+                ("Recovery Spin", 30 * 60, 128.0, 88.0, 27.3, 96.0, 95.0, 94.0, True),
+                ("Sweet Spot 3x12", 58 * 60, 224.0, 84.0, 31.0, 82.0, 80.0, 74.0, False),
+                ("Cadence Drill", 36 * 60, 172.0, 98.0, 29.7, 88.0, 93.0, 84.0, True),
+                ("Over-Under 4x9", 52 * 60, 231.0, 87.2, 32.1, 79.0, 77.0, 70.0, False),
+                ("Endurance 60", 60 * 60, 182.0, 82.3, 29.2, 93.0, 91.0, 89.0, True),
+            ]
+            for idx, item in enumerate(seeds):
+                (
+                    name,
+                    elapsed,
+                    avg_power,
+                    avg_cadence,
+                    avg_speed,
+                    p_comp,
+                    rpm_comp,
+                    both_comp,
+                    completed,
+                ) = item
+                ended = now - timedelta(days=idx)
+                started = ended - timedelta(seconds=elapsed)
+                out.append(
+                    SessionRecord(
+                        started_at_utc=started.isoformat(),
+                        ended_at_utc=ended.isoformat(),
+                        workout_name=name,
+                        target_mode="erg",
+                        ftp_watts=220,
+                        completed=completed,
+                        planned_duration_sec=elapsed,
+                        elapsed_duration_sec=elapsed,
+                        distance_km=(avg_speed * (elapsed / 3600.0)),
+                        avg_power_watts=avg_power,
+                        avg_cadence_rpm=avg_cadence,
+                        avg_speed_kmh=avg_speed,
+                        power_compliance_pct=p_comp,
+                        rpm_compliance_pct=rpm_comp,
+                        both_compliance_pct=both_comp,
+                    )
+                )
+            return out
+
         rows: list[dict[str, str]] = []
-        sessions = load_recent_sessions(limit=30)
+        sessions = demo_sessions() if analytics_demo_mode else load_recent_sessions(limit=30)
         for item in sessions[:12]:
             snapshot_hint = item.ended_at_utc.replace(":", "-").split(".")[0]
             rows.append(
@@ -2188,12 +2240,19 @@ def run_web_ui(
         nonlocal sound_alerts
         sound_alerts = bool(sound_toggle.value)
 
+    def on_analytics_demo_toggle() -> None:
+        nonlocal analytics_demo_mode
+        analytics_demo_mode = bool(analytics_demo_switch.value)
+        refresh_history()
+        refresh_ui()
+
     band_select.on_value_change(lambda _: refresh_templates())
     ftp_input.on_value_change(lambda _: on_ftp_or_mode_change())
     mode_select.on_value_change(lambda _: on_ftp_or_mode_change())
     strict_switch.on_value_change(lambda _: on_strict_change())
     preset_select.on_value_change(lambda _: on_preset_change())
     sound_toggle.on_value_change(lambda _: on_sound_toggle())
+    analytics_demo_switch.on_value_change(lambda _: on_analytics_demo_toggle())
     scan_btn.on_click(on_scan)
     connect_btn.on_click(on_connect)
     disconnect_btn.on_click(on_disconnect)
