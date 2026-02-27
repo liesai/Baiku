@@ -4,16 +4,20 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+import math
+import os
 from pathlib import Path
 import time
 from typing import Any, cast
 from uuid import uuid4
 
-from nicegui import core, ui
+from nicegui import app, core, ui
 
 from backend.ble.ftms_client import IndoorBikeData, ScannedDevice
 from backend.ui.coaching import ActionStabilizer, compute_coaching_signal
 from backend.ui.controller import UIController
+from backend.ui.game_layer import DEFAULT_GAME_GOALS, GoalTracker
 from backend.workout.library import build_plan_from_template, list_templates
 from backend.workout.model import WorkoutPlan, WorkoutStep
 from backend.workout.runner import TargetMode, WorkoutProgress
@@ -40,16 +44,24 @@ MAX_CADENCE_RPM = 130
 MAX_SPEED_KMH = 70
 TIMELINE_SAMPLE_SEC = 2
 ACTION_SWITCH_MIN_SEC = 2.0
+ASSETS_ROUTE = "/velox-assets"
+ASSETS_DIR = Path(__file__).resolve().parent / "assets"
+SPRITE_URL = f"{ASSETS_ROUTE}/cyclist_sprite_aligned.png"
+SCENE_BG_URL = f"{ASSETS_ROUTE}/forest_bg.png"
+DMD_CYCLIST_URL = f"{ASSETS_ROUTE}/dmd_cyclist_bonus.png"
+_ASSETS_MOUNTED = False
 
 
 @dataclass
 class WebState:
     connected: bool = False
+    hm_connected: bool = False
     status: str = "Not connected"
     workout: WorkoutPlan | None = None
     progress: WorkoutProgress | None = None
     power: int | None = None
     cadence: float | None = None
+    heart_rate_bpm: int | None = None
     speed: float | None = None
     distance_km: float = 0.0
     last_ts: float | None = None
@@ -157,9 +169,25 @@ def run_web_ui(
     host: str = "127.0.0.1",
     port: int = 8088,
     start_delay_sec: int = 10,
+    ui_theme: str = "classic",
 ) -> int:
+    global _ASSETS_MOUNTED
+    if not _ASSETS_MOUNTED:
+        try:
+            app.add_static_files(ASSETS_ROUTE, str(ASSETS_DIR))
+        except Exception:
+            # Route might already be mounted during hot reload.
+            pass
+        _ASSETS_MOUNTED = True
+
     controller = UIController(debug_ftms=False, simulate_ht=simulate_ht)
     state = WebState()
+    pinball_mode = ui_theme == "pinball"
+    csp_safe_mode = pinball_mode and os.getenv("VELOX_UI_CSP_SAFE", "").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
     ui.add_head_html(
         """
         <style>
@@ -176,15 +204,83 @@ def run_web_ui(
             color: var(--gb-text);
             font-family: Arial, "Segoe UI", sans-serif;
           }
-          body.gb-layout-1080 {
-            height: 100vh;
-            overflow: hidden;
-            font-size: 0.95rem;
+          body.gb-theme-pinball {
+            background:
+              radial-gradient(circle at 20% 10%, #1d0b2e 0%, rgba(29,11,46,0) 45%),
+              radial-gradient(circle at 80% 0%, #052b45 0%, rgba(5,43,69,0) 42%),
+              linear-gradient(180deg, #090c1d 0%, #0a1631 100%);
           }
-          body.gb-layout-1440 {
-            height: 100vh;
-            overflow: hidden;
-            font-size: 1rem;
+          body.gb-theme-pinball .gb-card {
+            border: 1px solid rgba(250, 204, 21, 0.35);
+            box-shadow:
+              0 0 0 1px rgba(244, 114, 182, 0.15),
+              0 8px 24px rgba(2, 6, 23, 0.42),
+              inset 0 0 18px rgba(56, 189, 248, 0.1);
+          }
+          .pinball-chip {
+            border: 1px solid rgba(250, 204, 21, 0.35);
+            border-radius: 10px;
+            background: rgba(15, 23, 42, 0.45);
+            padding: 4px 8px;
+            font-size: .8rem;
+            font-weight: 700;
+            color: #f8fafc;
+          }
+          .pinball-jackpot {
+            color: #facc15;
+            text-shadow: 0 0 10px rgba(250, 204, 21, 0.6);
+          }
+          .dmd-shell {
+            position: relative;
+            border: 1px solid rgba(250, 204, 21, 0.35);
+            border-radius: 12px;
+            background: linear-gradient(180deg, #190e06 0%, #100702 100%);
+            padding: 8px;
+            box-shadow:
+              inset 0 0 0 1px rgba(255, 181, 41, 0.16),
+              inset 0 0 30px rgba(255, 120, 0, 0.14),
+              0 8px 18px rgba(2, 6, 23, 0.42);
+          }
+          .dmd-bg {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 220px;
+            height: 88px;
+            object-fit: cover;
+            transform: translate(-50%, -50%);
+            opacity: 0.14;
+            pointer-events: none;
+            image-rendering: pixelated;
+            filter: saturate(0.95) contrast(1.02);
+          }
+          .dmd-screen {
+            position: relative;
+            z-index: 2;
+            width: 100%;
+            height: 96px;
+            border-radius: 8px;
+            background: #090303;
+            display: block;
+            image-rendering: pixelated;
+          }
+          .mini-graph-shell {
+            border: 1px solid rgba(56, 189, 248, 0.28);
+            border-radius: 10px;
+            background: rgba(2, 6, 23, 0.35);
+            padding: 6px;
+          }
+          .mini-graph {
+            width: 100%;
+            height: 86px;
+            display: block;
+            border-radius: 8px;
+            background: rgba(2, 6, 23, 0.55);
+          }
+          .gb-pixel {
+            font-family: "Courier New", monospace;
+            font-weight: 700;
+            letter-spacing: 0.02em;
           }
           .gb-card {
             background: linear-gradient(180deg, var(--gb-surface) 0%, var(--gb-surface-2) 100%);
@@ -233,8 +329,472 @@ def run_web_ui(
             background: #0f1b35 !important;
             color: #e2e8f0 !important;
           }
+          .ve-scene {
+            display: block;
+            position: relative;
+            width: 100%;
+            min-width: 100%;
+            height: 144px;
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            border-radius: 12px;
+            overflow: hidden;
+            background: linear-gradient(180deg, #0a2a4e 0%, #15426d 58%, #0f2f52 100%);
+            --ve-bg-offset: 0px;
+            --ve-pedal-rot: 0deg;
+            --ve-rider-bob: 0px;
+            --ve-sprite-shift-x: 0px;
+          }
+          .ve-scene[data-zone="ok"] { box-shadow: inset 0 0 0 2px rgba(34,197,94,.25); }
+          .ve-scene[data-zone="bad"] { box-shadow: inset 0 0 0 2px rgba(239,68,68,.25); }
+          .ve-scene[data-action="up"] .ve-hud-action { color: #f59e0b; }
+          .ve-scene[data-action="down"] .ve-hud-action { color: #ef4444; }
+          .ve-scene[data-action="steady"] .ve-hud-action { color: #22c55e; }
+          .ve-bg {
+            position: absolute;
+            left: 0;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            background-image: url('__SCENE_BG_URL__');
+            background-repeat: repeat-x;
+            background-size: auto 100%;
+            image-rendering: pixelated;
+          }
+          .ve-bg-main {
+            opacity: 1;
+            background-position-x: var(--ve-bg-offset);
+            filter: saturate(1.05) contrast(1.02);
+          }
+          .ve-rider {
+            position: absolute;
+            left: 74px;
+            bottom: 14px;
+            width: 112px;
+            height: 74px;
+            transform: translateY(var(--ve-rider-bob));
+            z-index: 5;
+          }
+          .ve-sprite {
+            position: absolute;
+            inset: 0;
+            image-rendering: pixelated;
+            background-image: url('__SPRITE_URL__');
+            background-repeat: no-repeat;
+            background-size: 300% 100%;
+            background-position: 0% 0;
+            transform: translateX(var(--ve-sprite-shift-x));
+            filter: drop-shadow(0 2px 2px rgba(2, 6, 23, 0.45));
+          }
+          .ve-hud {
+            position: absolute;
+            right: 10px;
+            top: 8px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: .02em;
+            background: rgba(2, 6, 23, 0.45);
+            border: 1px solid rgba(56,189,248,.35);
+            border-radius: 8px;
+            padding: 3px 7px;
+            color: #e2e8f0;
+          }
+          .ve-hud-speed { color: #7dd3fc; }
+          .ve-fx {
+            position: absolute;
+            left: 50%;
+            top: 42%;
+            transform: translate(-50%, -50%) scale(0.72);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 8;
+            font-size: 1.35rem;
+            font-weight: 900;
+            letter-spacing: 0.05em;
+            text-shadow: 0 0 12px rgba(2, 6, 23, 0.75);
+            transition: transform .22s ease-out, opacity .22s ease-out;
+            color: #f8fafc;
+          }
+          .ve-fx.show {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+          }
+          .ve-fx.bonus { color: #22d3ee; }
+          .ve-fx.multi { color: #a78bfa; }
+          .ve-fx.jackpot { color: #facc15; }
+          .ve-fx.coach { color: #86efac; }
+          .ve-fx.phase { color: #fcd34d; }
+          .ve-scene.fx-jackpot {
+            box-shadow: inset 0 0 0 2px rgba(250,204,21,.45), 0 0 24px rgba(250,204,21,.38);
+          }
+          .ve-scene.fx-multi {
+            box-shadow: inset 0 0 0 2px rgba(167,139,250,.42), 0 0 20px rgba(167,139,250,.3);
+          }
+          .ve-scene.fx-bonus {
+            box-shadow: inset 0 0 0 2px rgba(34,211,238,.42), 0 0 20px rgba(34,211,238,.28);
+          }
+          .ve-dot {
+            position: absolute;
+            left: var(--x, 50%);
+            top: var(--y, 50%);
+            width: 6px;
+            height: 6px;
+            border-radius: 999px;
+            pointer-events: none;
+            z-index: 9;
+            opacity: 0.95;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px currentColor;
+          }
+          .ve-dot.bonus { color: #22d3ee; background: #22d3ee; }
+          .ve-dot.multi { color: #a78bfa; background: #a78bfa; }
+          .ve-dot.jackpot { color: #facc15; background: #facc15; }
         </style>
+        <script>
+          window.veloxUpdateScene = function(speed, cadence, inZone, action) {
+            const scene = document.getElementById('ve-scene');
+            if (!scene) return;
+            const speedNode = document.getElementById('ve-scene-speed');
+            const actionNode = document.getElementById('ve-scene-action');
+            const spriteNode = document.getElementById('ve-sprite');
+            const state = window.__velox_scene_state || {
+              bg: 0,
+              pedal: 0,
+              bobTick: 0,
+              frameTick: 0,
+            };
+            const s = Math.max(0, Number(speed || 0));
+            const c = Math.max(0, Number(cadence || 0));
+            state.bg = (state.bg - Math.max(0.15, s * 0.25)) % 900;
+            state.pedal = (state.pedal + (c * 0.92)) % 360;
+            state.bobTick += 0.35;
+            state.frameTick += Math.max(0.25, c / 65);
+            const bob = Math.sin(state.bobTick + c / 20) * Math.min(2.5, 0.6 + c / 65);
+            scene.style.setProperty('--ve-bg-offset', `${state.bg}px`);
+            scene.style.setProperty('--ve-pedal-rot', `${state.pedal}deg`);
+            scene.style.setProperty('--ve-rider-bob', `${bob}px`);
+            scene.dataset.zone = inZone ? 'ok' : 'bad';
+            scene.dataset.action = action || 'steady';
+            if (spriteNode) {
+              const frame = Math.floor(state.frameTick) % 3;
+              const x = frame * 50;
+              const shiftByFrame = [0, 0, 0];
+              spriteNode.style.backgroundPosition = `${x}% 0%`;
+              scene.style.setProperty('--ve-sprite-shift-x', `${shiftByFrame[frame]}px`);
+            }
+            if (speedNode) speedNode.textContent = `${s.toFixed(1)} km/h`;
+            if (actionNode) {
+              if (action === 'up') actionNode.textContent = 'PUSH';
+              else if (action === 'down') actionNode.textContent = 'EASE';
+              else actionNode.textContent = 'HOLD';
+            }
+            window.__velox_scene_state = state;
+          };
+          window.veloxPinballFx = function(kind, label) {
+            const scene = document.getElementById('ve-scene');
+            const fx = document.getElementById('ve-fx');
+            if (!scene || !fx) return;
+            scene.classList.remove('fx-bonus', 'fx-multi', 'fx-jackpot');
+            void scene.offsetWidth;
+            const cssKind = (kind === 'jackpot' || kind === 'multi') ? kind : 'bonus';
+            scene.classList.add(`fx-${cssKind}`);
+            fx.classList.remove('bonus', 'multi', 'jackpot', 'show');
+            fx.classList.add(cssKind);
+            if (label) fx.textContent = label;
+            else if (cssKind === 'jackpot') fx.textContent = 'JACKPOT!';
+            else if (cssKind === 'multi') fx.textContent = 'MULTI!';
+            else fx.textContent = 'BONUS!';
+            void fx.offsetWidth;
+            fx.classList.add('show');
+            window.setTimeout(() => {
+              fx.classList.remove('show');
+              scene.classList.remove('fx-bonus', 'fx-multi', 'fx-jackpot');
+            }, 850);
+            window.veloxPinballDotBurst(cssKind, cssKind === 'jackpot' ? 22 : 14);
+          };
+          window.veloxCoachCue = function(kind, label, durationMs) {
+            const scene = document.getElementById('ve-scene');
+            const fx = document.getElementById('ve-fx');
+            if (!scene || !fx) return;
+            const cssKind = (kind === 'phase') ? 'phase' : 'coach';
+            fx.classList.remove('bonus', 'multi', 'jackpot', 'coach', 'phase', 'show');
+            fx.classList.add(cssKind);
+            fx.textContent = label || (cssKind === 'phase' ? 'TRANSITION' : 'GOOD JOB');
+            void fx.offsetWidth;
+            fx.classList.add('show');
+            const duration = Math.max(1100, Number(durationMs || 1700));
+            window.setTimeout(() => {
+              fx.classList.remove('show');
+            }, duration);
+          };
+          window.veloxPinballDotBurst = function(kind, count) {
+            const scene = document.getElementById('ve-scene');
+            if (!scene) return;
+            const total = Math.max(6, Number(count || 14));
+            for (let i = 0; i < total; i += 1) {
+              const dot = document.createElement('span');
+              dot.className = `ve-dot ${kind || 'bonus'}`;
+              dot.style.setProperty('--x', `${50 + (Math.random() * 16 - 8)}%`);
+              dot.style.setProperty('--y', `${44 + (Math.random() * 18 - 9)}%`);
+              scene.appendChild(dot);
+              const angle = Math.random() * Math.PI * 2;
+              const dist = 18 + Math.random() * 44;
+              const dx = Math.cos(angle) * dist;
+              const dy = Math.sin(angle) * dist;
+              dot.animate(
+                [
+                  { transform: 'translate(-50%, -50%) scale(1)', opacity: 0.95 },
+                  {
+                    transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(0.25)`,
+                    opacity: 0,
+                  },
+                ],
+                { duration: 520 + Math.random() * 220, easing: 'cubic-bezier(.2,.7,.2,1)' },
+              );
+              window.setTimeout(() => dot.remove(), 900);
+            }
+          };
+          window.veloxPinballPattern = function(pattern) {
+            const p = pattern || 'bonus_chain';
+            const seq = {
+              bonus_chain: [
+                [0, 'bonus', 'BONUS!'],
+                [280, 'bonus', 'KEEP IT!'],
+              ],
+              step_clear: [
+                [0, 'multi', 'STEP CLEAR'],
+                [340, 'bonus', 'CLEAN LINE'],
+              ],
+              jackpot_rush: [
+                [0, 'multi', 'MULTI UP'],
+                [260, 'bonus', 'OVERDRIVE'],
+                [560, 'jackpot', 'JACKPOT!'],
+              ],
+            }[p] || [[0, 'bonus', 'BONUS!']];
+            seq.forEach((item) => {
+              const [delay, kind, label] = item;
+              window.setTimeout(() => window.veloxPinballFx(kind, label), delay);
+            });
+          };
+          window.veloxDmd = (function() {
+            let canvas = null;
+            let ctx = null;
+            let ticker = '';
+            let flash = '';
+            let flashKind = 'bonus';
+            let flashUntil = 0;
+            const off = document.createElement('canvas');
+            off.width = 320;
+            off.height = 64;
+            const octx = off.getContext('2d', { willReadFrequently: true });
+
+            function colors(kind) {
+              if (kind === 'jackpot') return ['#2b0900', '#ff8800', '#ffd24d'];
+              if (kind === 'multi') return ['#180a2a', '#c188ff', '#f0d9ff'];
+              return ['#240900', '#ff9f1c', '#ffd166'];
+            }
+
+            function drawDotGrid(base, glow, hot) {
+              if (!ctx || !canvas || !octx) return;
+              const w = canvas.width;
+              const h = canvas.height;
+              const cols = off.width;
+              const rows = off.height;
+              const cw = w / cols;
+              const ch = h / rows;
+              const frame = octx.getImageData(0, 0, cols, rows).data;
+              ctx.fillStyle = '#050202';
+              ctx.fillRect(0, 0, w, h);
+              for (let y = 0; y < rows; y += 1) {
+                for (let x = 0; x < cols; x += 1) {
+                  const px = (x + 0.5) * cw;
+                  const py = (y + 0.5) * ch;
+                  const idx = ((y * cols) + x) * 4;
+                  const lit = frame[idx] > 30;
+                  ctx.fillStyle = lit ? glow : base;
+                  ctx.beginPath();
+                  ctx.arc(px, py, Math.min(cw, ch) * (lit ? 0.28 : 0.18), 0, Math.PI * 2);
+                  ctx.fill();
+                  if (lit) {
+                    ctx.fillStyle = hot;
+                    ctx.beginPath();
+                    ctx.arc(px, py, Math.min(cw, ch) * 0.1, 0, Math.PI * 2);
+                    ctx.fill();
+                  }
+                }
+              }
+            }
+
+            function render() {
+              if (!ctx || !canvas || !octx) return;
+              const now = Date.now();
+              const kind = flashUntil > now ? flashKind : 'bonus';
+              const colorset = colors(kind);
+              octx.fillStyle = '#000';
+              octx.fillRect(0, 0, off.width, off.height);
+              octx.fillStyle = '#fff';
+              octx.font = 'bold 22px monospace';
+              octx.textAlign = 'center';
+              octx.textBaseline = 'middle';
+              const msg = flashUntil > now ? flash : ticker;
+              octx.fillText(msg || 'VELOX READY', 160, 22);
+              octx.font = 'bold 12px monospace';
+              octx.fillText('TRACK  •  COMPETE  •  WIN', 160, 46);
+              try {
+                drawDotGrid(colorset[0], colorset[1], colorset[2]);
+              } catch (e) {
+                // Keep render loop alive even if one frame fails.
+              }
+              requestAnimationFrame(render);
+            }
+
+            return {
+              init: function() {
+                canvas = document.getElementById('ve-dmd');
+                if (!canvas) return;
+                ctx = canvas.getContext('2d');
+                const rect = canvas.getBoundingClientRect();
+                canvas.width = Math.max(320, Math.floor(rect.width));
+                canvas.height = Math.max(88, Math.floor(rect.height));
+                if (ctx) ctx.setTransform(1, 0, 0, 1, 0, 0);
+                if (!window.__velox_dmd_started) {
+                  window.__velox_dmd_started = true;
+                  requestAnimationFrame(render);
+                }
+              },
+              ticker: function(msg) {
+                ticker = String(msg || '').slice(0, 24);
+              },
+              flash: function(msg, kind) {
+                flash = String(msg || '').slice(0, 24);
+                flashKind = kind || 'bonus';
+                flashUntil = Date.now() + 1200;
+              },
+            };
+          })();
+          window.veloxCspSafeUiLoop = function() {
+            if (window.__velox_csp_loop_started) return;
+            window.__velox_csp_loop_started = true;
+            let lastReward = '';
+            let dmdInitDone = false;
+            const parseVal = (id) => {
+              const el = document.getElementById(id);
+              if (!el) return 0;
+              const m = String(el.textContent || '').replace(',', '.').match(/-?\\d+(?:\\.\\d+)?/);
+              return m ? Number(m[0]) : 0;
+            };
+            const textOf = (id) => {
+              const el = document.getElementById(id);
+              return String(el ? (el.textContent || '') : '').trim();
+            };
+            window.setInterval(() => {
+              if (!dmdInitDone) {
+                window.veloxDmd.init();
+                dmdInitDone = true;
+              }
+              const speed = parseVal('ve-kpi-speed');
+              const cadence = parseVal('ve-kpi-cadence');
+              const guidance = textOf('ve-guidance');
+              let action = 'steady';
+              let inZone = true;
+              if (/Accelere|Augmente/i.test(guidance)) {
+                action = 'up';
+                inZone = false;
+              } else if (/Reduis|Baisse/i.test(guidance)) {
+                action = 'down';
+                inZone = false;
+              } else if (/Action:\\s*-/i.test(guidance)) {
+                inZone = false;
+              }
+              window.veloxUpdateScene(speed, cadence, inZone, action);
+              if (window.veloxMiniGraph) {
+                window.veloxMiniGraph.push(parseVal('ve-kpi-power'), cadence);
+              }
+
+              const score = textOf('ve-score');
+              const multi = textOf('ve-pinball-multi');
+              const jackpot = textOf('ve-pinball-jackpot');
+              const step = textOf('ve-step-info');
+              window.veloxDmd.ticker(`${score}  ${multi}  ${jackpot}  ${step}`.slice(0, 24));
+
+              const reward = textOf('ve-pinball-reward');
+              if (reward && reward !== lastReward && !/READY/i.test(reward)) {
+                let kind = 'bonus';
+                if (/JACKPOT/i.test(reward)) kind = 'jackpot';
+                else if (/MULTI/i.test(reward)) kind = 'multi';
+                window.veloxPinballFx(kind, reward.slice(0, 20));
+                window.veloxDmd.flash(reward.slice(0, 22), kind);
+                lastReward = reward;
+              }
+            }, 260);
+          };
+          window.addEventListener('DOMContentLoaded', () => {
+            window.veloxCspSafeUiLoop();
+          });
+          window.veloxMiniGraph = (function() {
+            let canvas = null;
+            let ctx = null;
+            const power = [];
+            const cadence = [];
+            const maxPoints = 90;
+            function draw() {
+              if (!ctx || !canvas) return;
+              const w = canvas.width;
+              const h = canvas.height;
+              ctx.fillStyle = '#040912';
+              ctx.fillRect(0, 0, w, h);
+              ctx.strokeStyle = 'rgba(148,163,184,.22)';
+              ctx.lineWidth = 1;
+              for (let i = 1; i <= 3; i += 1) {
+                const y = (h / 4) * i;
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(w, y);
+                ctx.stroke();
+              }
+              const drawLine = (arr, color, maxv) => {
+                if (!arr.length) return;
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                arr.forEach((v, i) => {
+                  const x = (i / Math.max(1, maxPoints - 1)) * w;
+                  const y = h - Math.max(0, Math.min(1, v / maxv)) * (h - 6) - 3;
+                  if (i === 0) ctx.moveTo(x, y);
+                  else ctx.lineTo(x, y);
+                });
+                ctx.stroke();
+              };
+              drawLine(power, '#22d3ee', 420);
+              drawLine(cadence, '#86efac', 130);
+            }
+            return {
+              init: function() {
+                canvas = document.getElementById('ve-mini-graph');
+                if (!canvas) return;
+                ctx = canvas.getContext('2d');
+                const rect = canvas.getBoundingClientRect();
+                canvas.width = Math.max(320, Math.floor(rect.width));
+                canvas.height = Math.max(86, Math.floor(rect.height));
+                draw();
+              },
+              push: function(p, c) {
+                if (!canvas || !ctx) this.init();
+                power.push(Number.isFinite(p) ? Number(p) : 0);
+                cadence.push(Number.isFinite(c) ? Number(c) : 0);
+                while (power.length > maxPoints) power.shift();
+                while (cadence.length > maxPoints) cadence.shift();
+                draw();
+              },
+            };
+          })();
+        </script>
         """
+        .replace("__SPRITE_URL__", SPRITE_URL)
+        .replace("__SCENE_BG_URL__", SCENE_BG_URL)
+        .replace("__DMD_CYCLIST_URL__", DMD_CYCLIST_URL)
     )
 
     templates = list_templates()
@@ -246,14 +806,25 @@ def run_web_ui(
     selected_device_address: str | None = None
     selected_template_label = ""
     zone_compliance = {"power_ok": 0, "power_total": 0, "rpm_ok": 0, "rpm_total": 0}
-    strict_mode = False
-    viewport_preset = "auto"
+    hm_detected = False
+    hm_sim_seed = 96.0
     session_started_at_utc: str | None = None
     current_snapshot_path: Path | None = None
     current_snapshot_csv_path: Path | None = None
     sound_alerts = True
     coaching_stabilizer = ActionStabilizer(min_switch_sec=ACTION_SWITCH_MIN_SEC)
     last_coaching_alert_key: str | None = None
+    goal_tracker = GoalTracker(DEFAULT_GAME_GOALS)
+    last_goal_tick_ts: float | None = None
+    pinball_score_bonus = 0
+    pinball_multiplier = 1
+    pinball_jackpots = 0
+    pinball_last_bonus = "READY"
+    pinball_last_step_seen = 0
+    pinball_last_jackpot_ts = 0.0
+    last_encourage_bucket: int | None = None
+    analytics_demo_mode = False
+    analytics_window = 7
 
     timeline_labels: list[str] = []
     timeline_expected_power: list[int] = []
@@ -263,8 +834,19 @@ def run_web_ui(
     timeline_step_ranges: list[tuple[int, int, str]] = []
     metric_samples: list[tuple[int | None, float | None, float | None]] = []
 
-    with ui.column().classes("w-full gap-1") as setup_header:
-        ui.label("VELOX ENGINE").classes("text-xl font-semibold tracking-wide")
+    with ui.column().classes("w-full gap-2") as setup_header:
+        with ui.row().classes("w-full items-center justify-between gap-2"):
+            ui.label("VELOX ENGINE").classes("text-xl font-semibold tracking-wide")
+            with ui.row().classes("items-center gap-4"):
+                with ui.row().classes("items-center gap-1"):
+                    ht_icon = ui.icon("directions_bike").classes("text-base")
+                    ui.label("HT").classes("text-xs font-semibold")
+                with ui.row().classes("items-center gap-1"):
+                    hm_icon = ui.icon("favorite").classes("text-base")
+                    ui.label("HM").classes("text-xs font-semibold")
+                open_connections_btn = ui.button("Connections").props("outline")
+                back_to_training_btn = ui.button("Back to training").props("outline")
+                back_to_training_btn.set_visibility(False)
         status_label = ui.label("Status: Not connected").classes("text-lg font-semibold")
         if simulate_ht:
             ui.label("SIM MODE - no BLE required").classes("text-orange-500 font-bold")
@@ -272,35 +854,28 @@ def run_web_ui(
     with ui.column().classes("w-full gap-4") as setup_view:
         ui.label("Course Setup").classes("text-xl font-semibold")
         with ui.card().classes("w-full gb-card"):
-            with ui.row().classes("w-full items-end gap-2"):
+            with ui.grid().classes("w-full grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2"):
                 band_select = ui.select(
                     ["All", "<=30 min", "30-45 min", "45-60 min", ">=60 min"],
                     value="All",
                     label="Duration",
+                ).classes("w-full min-w-[180px]")
+                ftp_input = ui.number("FTP (W)", value=220, min=80, max=500).classes(
+                    "w-full min-w-[140px]"
                 )
-                ftp_input = ui.number("FTP (W)", value=220, min=80, max=500)
                 mode_select = ui.select(
                     ["erg", "resistance", "slope"], value="erg", label="Mode"
-                )
+                ).classes("w-full min-w-[150px]")
                 delay_input = ui.number(
                     "Start delay (sec)", value=int(max(0, start_delay_sec)), min=0, max=180
-                )
-                strict_switch = ui.switch("Single-screen strict", value=False)
-                preset_select = ui.select(
-                    {"auto": "Auto", "1080p": "1080p", "1440p": "1440p"},
-                    value="auto",
-                    label="Viewport",
-                )
-                device_select = ui.select([], label="Device").classes("min-w-[280px]")
-                scan_btn = ui.button("Scan")
-                connect_btn = ui.button("Connect")
-                disconnect_btn = ui.button("Disconnect")
-                builder_btn = ui.button("Workout builder")
-                disconnect_btn.disable()
+                ).classes("w-full min-w-[170px]")
+                builder_btn = ui.button("Workout builder").classes("w-full")
             selected_course_label = ui.label("Selected course: -").classes(
-                "text-sm font-medium"
+                "text-sm font-medium whitespace-normal break-words"
             )
-            course_cards_grid = ui.grid().classes("w-full grid-cols-1 md:grid-cols-3 gap-3")
+            course_cards_grid = ui.grid().classes(
+                "w-full grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3"
+            )
             course_info = ui.label("No course loaded").classes("text-sm text-slate-300")
 
         plan_chart = ui.echart(
@@ -308,7 +883,11 @@ def run_web_ui(
                 "title": {
                     "text": "Difficulty curve (target watts)",
                     "left": "center",
-                    "textStyle": {"color": "#ffffff", "fontWeight": "bold", "fontFamily": "Arial"},
+                    "textStyle": {
+                        "color": "#ffffff",
+                        "fontWeight": "bold",
+                        "fontFamily": "Arial",
+                    },
                 },
                 "tooltip": {"trigger": "axis"},
                 "xAxis": {"type": "category", "data": [], "axisLabel": {"color": "#ffffff"}},
@@ -344,6 +923,107 @@ def run_web_ui(
             export_json_btn.disable()
             export_csv_btn.disable()
 
+        ui.label("Analytics").classes("text-base font-medium")
+        with ui.card().classes("w-full gb-card gb-compact"):
+            with ui.row().classes("w-full items-center gap-2"):
+                analytics_demo_switch = ui.switch("Analytics demo (sample data)", value=False)
+                analytics_window_select = ui.select(
+                    {7: "Last 7", 30: "Last 30"},
+                    value=7,
+                    label="Window",
+                ).classes("min-w-[140px]")
+            with ui.grid().classes("w-full grid-cols-2 md:grid-cols-4 gap-2"):
+                analytics_sessions = ui.label("Sessions: 0").classes("text-sm")
+                analytics_completed = ui.label("Completion: -").classes("text-sm")
+                analytics_compliance = ui.label("Compliance (both): -").classes("text-sm")
+                analytics_time = ui.label("Total time: 0 min").classes("text-sm")
+            with ui.grid().classes("w-full grid-cols-1 md:grid-cols-3 gap-2"):
+                analytics_power = ui.label("Avg power: -").classes("text-sm")
+                analytics_cadence = ui.label("Avg cadence: -").classes("text-sm")
+                analytics_speed = ui.label("Avg speed: -").classes("text-sm")
+            analytics_trend_chart = ui.echart(
+                {
+                    "title": {
+                        "text": "Trends (sessions)",
+                        "left": "center",
+                        "textStyle": {
+                            "color": "#ffffff",
+                            "fontWeight": "bold",
+                            "fontFamily": "Arial",
+                        },
+                    },
+                    "tooltip": {"trigger": "axis"},
+                    "legend": {
+                        "data": ["Compliance %", "Avg Power (W)"],
+                        "top": 26,
+                        "textStyle": {"color": "#ffffff"},
+                    },
+                    "xAxis": {"type": "category", "data": [], "axisLabel": {"color": "#ffffff"}},
+                    "yAxis": [
+                        {
+                            "type": "value",
+                            "name": "%",
+                            "axisLabel": {"color": "#ffffff"},
+                            "nameTextStyle": {"color": "#ffffff"},
+                            "min": 0,
+                            "max": 100,
+                        },
+                        {
+                            "type": "value",
+                            "name": "W",
+                            "axisLabel": {"color": "#ffffff"},
+                            "nameTextStyle": {"color": "#ffffff"},
+                        },
+                    ],
+                    "series": [
+                        {
+                            "name": "Compliance %",
+                            "type": "line",
+                            "data": [],
+                            "showSymbol": True,
+                            "itemStyle": {"color": "#22d3ee"},
+                            "lineStyle": {"width": 2},
+                        },
+                        {
+                            "name": "Avg Power (W)",
+                            "type": "line",
+                            "yAxisIndex": 1,
+                            "data": [],
+                            "showSymbol": True,
+                            "itemStyle": {"color": "#7ddc74"},
+                            "lineStyle": {"width": 2},
+                        },
+                    ],
+                    "grid": {"left": 42, "right": 48, "top": 62, "bottom": 34},
+                    "animation": False,
+                }
+            ).classes("w-full h-56")
+
+    with ui.column().classes("w-full gap-4") as connections_view:
+        ui.label("Connections").classes("text-xl font-semibold")
+        with ui.card().classes("w-full gb-card"):
+            ui.label("Home Trainer (HT)").classes("text-base font-semibold")
+            with ui.row().classes("w-full items-end gap-2"):
+                ht_device_select = ui.select([], label="HT device").classes("min-w-[360px]")
+                ht_scan_btn = ui.button("Scan HT")
+                ht_connect_btn = ui.button("Connect HT")
+                ht_disconnect_btn = ui.button("Disconnect HT")
+                ht_disconnect_btn.disable()
+        with ui.card().classes("w-full gb-card"):
+            ui.label("Heart Monitor (HM)").classes("text-base font-semibold")
+            with ui.row().classes("w-full items-center gap-3"):
+                hm_sim_switch = ui.switch("Simulate HM", value=True)
+                hm_detect_btn = ui.button("Detect HM")
+                hm_connect_btn = ui.button("Connect HM")
+                hm_disconnect_btn = ui.button("Disconnect HM")
+                hm_hint_label = ui.label("HM: not detected").classes("text-sm gb-muted")
+                hm_disconnect_btn.disable()
+            ui.label(
+                "For now HM is simulated locally. Later we can plug real BLE HRM."
+            ).classes("text-xs gb-muted")
+
+    connections_view.set_visibility(False)
+
     with ui.column().classes("w-full gap-2") as workout_view:
         with ui.row().classes("w-full items-center justify-between"):
             ui.label("Workout Session").classes("text-lg gb-title-neutral")
@@ -352,13 +1032,57 @@ def run_web_ui(
                 stop_btn = ui.button("Stop session").props("color=negative")
                 stop_btn.disable()
 
+        with ui.row().classes("w-full gap-2") as pinball_hud_row:
+            ui.label("MODE: PINBALL").classes("pinball-chip")
+            if csp_safe_mode:
+                ui.label("CSP-SAFE").classes("pinball-chip")
+            pinball_mission_label = ui.label("MISSION: Keep target zone").classes("pinball-chip")
+            pinball_multiplier_label = ui.label("MULTI x1").classes("pinball-chip").props(
+                "id=ve-pinball-multi"
+            )
+            pinball_jackpot_label = ui.label("JACKPOT 0").classes(
+                "pinball-chip pinball-jackpot"
+            ).props("id=ve-pinball-jackpot")
+            pinball_reward_label = ui.label("BONUS READY").classes("pinball-chip").props(
+                "id=ve-pinball-reward"
+            )
+        pinball_hud_row.set_visibility(pinball_mode)
+
+        pinball_dmd = ui.html(
+            """
+            <div class="dmd-shell">
+              <img class="dmd-bg" src="__DMD_CYCLIST_URL__" alt="dmd cyclist" />
+              <canvas id="ve-dmd" class="dmd-screen"></canvas>
+            </div>
+            """
+            .replace("__DMD_CYCLIST_URL__", DMD_CYCLIST_URL)
+        ).classes("w-full")
+        pinball_dmd.set_visibility(pinball_mode)
+
+        pinball_mini_graph = ui.html(
+            """
+            <div class="mini-graph-shell">
+              <canvas id="ve-mini-graph" class="mini-graph"></canvas>
+            </div>
+            """
+        ).classes("w-full")
+        pinball_mini_graph.set_visibility(pinball_mode)
+
+        with ui.row().classes("w-full gap-2") as pinball_sim_row:
+            ui.label("Sim Pinball").classes("pinball-chip")
+            sim_multi_btn = ui.button("Trigger Multi").props("outline color=purple")
+            sim_jackpot_btn = ui.button("Trigger Jackpot").props("outline color=amber")
+            sim_bonus_btn = ui.button("Trigger Bonus").props("outline color=cyan")
+            sim_chain_btn = ui.button("Run Combo Chain").props("outline color=pink")
+        pinball_sim_row.set_visibility(pinball_mode and simulate_ht)
+
         with ui.row().classes("w-full gap-2"):
             with ui.card().classes("w-full gb-card gb-compact"):
                 with ui.row().classes("w-full items-center gap-4 flex-wrap"):
                     workout_info = ui.label("No workout loaded").classes(
                         "text-sm font-semibold"
                     )
-                    step_info = ui.label("Step: -").classes("text-sm")
+                    step_info = ui.label("Step: -").classes("text-sm").props("id=ve-step-info")
                     elapsed_label = ui.label("Elapsed: 00:00").classes("text-sm")
                     remaining_label = ui.label("Remaining: 00:00").classes("text-sm")
                     compliance_info = ui.label("Compliance: -").classes("text-sm")
@@ -368,131 +1092,134 @@ def run_web_ui(
                     mode_label = ui.label("Mode: ERG").classes("text-sm gb-muted")
                     sound_toggle = ui.switch("Sound alerts", value=True).classes("text-sm")
                 with ui.row().classes("w-full items-center gap-3"):
-                    guidance_label = ui.label("Action: -").classes("text-sm font-semibold")
+                    guidance_label = ui.label("Action: -").classes(
+                        "text-sm font-semibold"
+                    ).props("id=ve-guidance")
 
-        with ui.grid().classes("w-full grid-cols-1 md:grid-cols-4 gap-2"):
+        with ui.grid().classes("w-full grid-cols-1 md:grid-cols-5 gap-2"):
             with ui.card().classes("w-full gb-kpi gb-compact"):
                 ui.label("Power").classes("text-xs gb-title-neutral")
-                kpi_power = ui.label("-- W").classes("gb-number")
+                kpi_power = ui.label("-- W").classes("gb-number").props("id=ve-kpi-power")
             with ui.card().classes("w-full gb-kpi gb-compact"):
                 ui.label("Cadence").classes("text-xs gb-title-neutral")
-                kpi_cadence = ui.label("-- rpm").classes("gb-number")
+                kpi_cadence = ui.label("-- rpm").classes("gb-number").props("id=ve-kpi-cadence")
+            with ui.card().classes("w-full gb-kpi gb-compact"):
+                ui.label("Heart rate").classes("text-xs gb-title-neutral")
+                kpi_hr = ui.label("-- bpm").classes("gb-number")
             with ui.card().classes("w-full gb-kpi gb-compact"):
                 ui.label("Speed").classes("text-xs gb-title-neutral")
-                kpi_speed = ui.label("-- km/h").classes("gb-number")
+                kpi_speed = ui.label("-- km/h").classes("gb-number").props("id=ve-kpi-speed")
             with ui.card().classes("w-full gb-kpi gb-compact"):
                 ui.label("Distance").classes("text-xs gb-title-neutral")
                 kpi_distance = ui.label("0,00 km").classes("gb-number")
 
         with ui.card().classes("w-full gb-card gb-compact"):
-            live_chart = ui.echart(
-                {
-                    "title": {
-                        "text": "Live performance curve",
-                        "left": "center",
-                        "textStyle": {
-                            "color": "#ffffff",
-                            "fontWeight": "bold",
-                            "fontFamily": "Arial",
-                        },
+            with ui.row().classes("w-full items-center justify-between gap-3 flex-wrap"):
+                game_score_label = ui.label("Score: 0").classes("text-sm gb-pixel").props(
+                    "id=ve-score"
+                )
+                game_coins_label = ui.label("Coins: 0").classes("text-sm gb-pixel")
+                game_streak_label = ui.label("Streak: 0").classes("text-sm gb-pixel")
+                game_goal_label = ui.label("Goal: -").classes("text-xs gb-pixel")
+                game_goal_progress_label = ui.label("0/0 s").classes("text-xs gb-pixel")
+            ui.html(
+                """
+                <div id="ve-scene" class="ve-scene" data-zone="ok">
+                  <div class="ve-bg ve-bg-main"></div>
+                  <div id="ve-fx" class="ve-fx">BONUS!</div>
+                  <div class="ve-hud">
+                    <span id="ve-scene-action" class="ve-hud-action">HOLD</span>
+                    <span id="ve-scene-speed" class="ve-hud-speed">0,0 km/h</span>
+                  </div>
+                  <div class="ve-rider">
+                    <div id="ve-sprite" class="ve-sprite"></div>
+                  </div>
+                </div>
+                """
+            ).classes("w-full")
+
+        live_chart = ui.echart(
+            {
+                "title": {
+                    "text": "Live performance curve",
+                    "left": "center",
+                    "textStyle": {
+                        "color": "#ffffff",
+                        "fontWeight": "bold",
+                        "fontFamily": "Arial",
                     },
-                    "textStyle": {"fontFamily": "Arial", "fontWeight": "normal"},
-                    "legend": {
-                        "data": [
-                            "Power expected",
-                            "Power actual",
-                            "Cadence expected",
-                            "Cadence actual",
-                        ],
-                        "selected": {
-                            "Power expected": True,
-                            "Power actual": True,
-                            "Cadence expected": True,
-                            "Cadence actual": True,
-                        },
-                        "top": 24,
-                        "textStyle": {"color": "#ffffff"},
-                    },
-                    "tooltip": {"trigger": "axis"},
-                    "xAxis": {
-                        "type": "category",
-                        "data": [],
+                },
+                "legend": {
+                    "data": [
+                        "Power expected",
+                        "Power actual",
+                        "Cadence expected",
+                        "Cadence actual",
+                    ],
+                    "top": 28,
+                    "textStyle": {"color": "#ffffff"},
+                },
+                "tooltip": {"trigger": "axis"},
+                "xAxis": {
+                    "type": "category",
+                    "data": [],
+                    "axisLabel": {"color": "#ffffff"},
+                    "boundaryGap": False,
+                },
+                "yAxis": [
+                    {
+                        "type": "value",
+                        "name": "W",
                         "axisLabel": {"color": "#ffffff"},
+                        "nameTextStyle": {"color": "#ffffff", "fontWeight": "bold"},
                     },
-                    "yAxis": [
-                        {
-                            "type": "value",
-                            "name": "W",
-                            "position": "left",
-                            "axisLabel": {"color": "#ffffff"},
-                            "nameTextStyle": {"color": "#ffffff", "fontWeight": "bold"},
-                            "splitLine": {"lineStyle": {"color": "rgba(148,163,184,.18)"}},
-                        },
-                        {
-                            "type": "value",
-                            "name": "rpm",
-                            "position": "right",
-                            "min": 40,
-                            "max": 130,
-                            "axisLabel": {"color": "#ffffff"},
-                            "nameTextStyle": {"color": "#ffffff", "fontWeight": "bold"},
-                            "splitLine": {"show": False},
-                        },
-                    ],
-                    "series": [
-                        {
-                            "name": "Power expected",
-                            "type": "line",
-                            "data": [],
-                            "smooth": False,
-                            "lineStyle": {
-                                "type": "dashed",
-                                "width": 2,
-                                "color": "rgba(148,163,184,.8)",
-                            },
-                            "symbol": "none",
-                        },
-                        {
-                            "name": "Power actual",
-                            "type": "line",
-                            "data": [],
-                            "smooth": True,
-                            "lineStyle": {"width": 3, "color": "#22d3ee"},
-                            "areaStyle": {
-                                "opacity": 0.22,
-                                "color": "rgba(56,189,248,.45)",
-                            },
-                            "connectNulls": False,
-                            "symbol": "none",
-                        },
-                        {
-                            "name": "Cadence expected",
-                            "type": "line",
-                            "yAxisIndex": 1,
-                            "data": [],
-                            "lineStyle": {
-                                "type": "dashed",
-                                "width": 2,
-                                "color": "#fbbf24",
-                            },
-                            "z": 3,
-                            "symbol": "none",
-                        },
-                        {
-                            "name": "Cadence actual",
-                            "type": "line",
-                            "yAxisIndex": 1,
-                            "data": [],
-                            "smooth": True,
-                            "lineStyle": {"width": 3, "color": "#86efac"},
-                            "z": 4,
-                            "connectNulls": False,
-                            "symbol": "none",
-                        },
-                    ],
-                    "grid": {"left": 48, "right": 48, "top": 70, "bottom": 32},
-                }
-            ).classes("w-full h-[250px]")
+                    {
+                        "type": "value",
+                        "name": "rpm",
+                        "axisLabel": {"color": "#ffffff"},
+                        "nameTextStyle": {"color": "#ffffff", "fontWeight": "bold"},
+                    },
+                ],
+                "series": [
+                    {
+                        "name": "Power expected",
+                        "type": "line",
+                        "data": [],
+                        "showSymbol": False,
+                        "lineStyle": {"type": "dashed", "width": 2},
+                        "itemStyle": {"color": "#6388ff"},
+                    },
+                    {
+                        "name": "Power actual",
+                        "type": "line",
+                        "data": [],
+                        "showSymbol": False,
+                        "lineStyle": {"width": 2},
+                        "itemStyle": {"color": "#7ddc74"},
+                    },
+                    {
+                        "name": "Cadence expected",
+                        "type": "line",
+                        "yAxisIndex": 1,
+                        "data": [],
+                        "showSymbol": False,
+                        "lineStyle": {"type": "dashed", "width": 2},
+                        "itemStyle": {"color": "#ffd15a"},
+                    },
+                    {
+                        "name": "Cadence actual",
+                        "type": "line",
+                        "yAxisIndex": 1,
+                        "data": [],
+                        "showSymbol": False,
+                        "lineStyle": {"width": 2},
+                        "itemStyle": {"color": "#ff7d7d"},
+                    },
+                ],
+                "grid": {"left": 50, "right": 50, "top": 72, "bottom": 40},
+                "animation": False,
+            }
+        ).classes("w-full h-72")
 
     workout_view.set_visibility(False)
 
@@ -687,32 +1414,85 @@ def run_web_ui(
         )
 
     def apply_layout_mode() -> None:
-        cls = "gb-layout-auto"
-        if strict_mode and viewport_preset == "1080p":
-            cls = "gb-layout-1080"
-        elif strict_mode and viewport_preset == "1440p":
-            cls = "gb-layout-1440"
+        theme_cls = "gb-theme-pinball" if pinball_mode else "gb-theme-classic"
         if core.loop is None:
             # NiceGUI loop/client not ready yet during initial startup.
             return
-        ui.run_javascript(
-            (
-                "document.body.classList.remove("
-                "'gb-layout-auto','gb-layout-1080','gb-layout-1440'"
-                ");"
-                f"document.body.classList.add('{cls}');"
-            )
+        _safe_run_js(
+            "document.body.classList.remove("
+            "'gb-theme-classic','gb-theme-pinball'"
+            ");"
+            f"document.body.classList.add('{theme_cls}');"
         )
+
+    def _safe_run_js(code: str) -> None:
+        """Best-effort JS execution; skip when timer/background has no slot/client context."""
+        if csp_safe_mode:
+            return
+        if core.loop is None:
+            return
+        try:
+            ui.run_javascript(code)
+        except (AssertionError, RuntimeError):
+            return
+
+    def trigger_pinball_event(kind: str, *, manual: bool = False) -> None:
+        nonlocal pinball_score_bonus, pinball_multiplier, pinball_jackpots
+        nonlocal pinball_last_bonus, pinball_last_jackpot_ts
+        if not pinball_mode:
+            return
+        now_ts = time.monotonic()
+        if kind == "multi":
+            reward = 80 * pinball_multiplier
+            pinball_score_bonus += reward
+            pinball_multiplier = min(8, pinball_multiplier + 1)
+            pinball_last_bonus = f"+{reward} MULTI"
+            _safe_run_js(f"window.veloxPinballFx('multi', 'MULTI +{reward}');")
+            _safe_run_js(f"window.veloxDmd.flash('MULTI +{reward}', 'multi');")
+            return
+        if kind == "jackpot":
+            if not manual and (now_ts - pinball_last_jackpot_ts) < 6.0:
+                return
+            pinball_jackpots += 1
+            reward = 150 * pinball_multiplier
+            pinball_score_bonus += reward
+            pinball_last_bonus = f"JACKPOT +{reward}"
+            pinball_last_jackpot_ts = now_ts
+            _safe_run_js(f"window.veloxPinballFx('jackpot', 'JACKPOT +{reward}');")
+            _safe_run_js(f"window.veloxDmd.flash('JACKPOT +{reward}', 'jackpot');")
+            return
+        reward = 60 * pinball_multiplier
+        pinball_score_bonus += reward
+        pinball_last_bonus = f"+{reward} BONUS"
+        _safe_run_js(f"window.veloxPinballFx('bonus', 'BONUS +{reward}');")
+        _safe_run_js(f"window.veloxDmd.flash('BONUS +{reward}', 'bonus');")
+
+    def trigger_pinball_pattern(name: str) -> None:
+        if not pinball_mode:
+            return
+        _safe_run_js(f"window.veloxPinballPattern('{name}');")
 
     def show_setup_screen() -> None:
         setup_header.set_visibility(True)
         setup_view.set_visibility(True)
+        connections_view.set_visibility(False)
+        back_to_training_btn.set_visibility(False)
+        workout_view.set_visibility(False)
+
+    def show_connections_screen() -> None:
+        setup_header.set_visibility(True)
+        setup_view.set_visibility(False)
+        connections_view.set_visibility(True)
+        back_to_training_btn.set_visibility(True)
         workout_view.set_visibility(False)
 
     def show_workout_screen() -> None:
         setup_header.set_visibility(False)
         setup_view.set_visibility(False)
+        connections_view.set_visibility(False)
         workout_view.set_visibility(True)
+        if pinball_mode:
+            _safe_run_js("window.veloxDmd.init();")
 
     def rebuild_workout_options() -> None:
         nonlocal workout_options, workout_option_by_label, workout_option_labels
@@ -803,11 +1583,13 @@ def run_web_ui(
                 if selected:
                     card_classes += " ring-2 ring-cyan-400"
                 with ui.card().classes(f"{card_classes} gb-card") as card:
-                    ui.label(option.name).classes("text-base font-semibold")
+                    ui.label(option.name).classes(
+                        "text-base font-semibold whitespace-normal break-words"
+                    )
                     ui.label(
                         f"{option.category} | {_fmt_duration(option.duration_sec)} | "
                         f"{option.avg_intensity_pct}% FTP"
-                    ).classes("text-xs text-slate-300")
+                    ).classes("text-xs text-slate-300 whitespace-normal")
                     ui.label(
                         "Built-in" if option.source == "builtin" else f"Custom: {option.key}"
                     ).classes("text-xs text-slate-500")
@@ -826,8 +1608,57 @@ def run_web_ui(
                     card.on("click", on_pick)
 
     def refresh_history() -> None:
+        def demo_sessions() -> list[SessionRecord]:
+            now = datetime.now(tz=timezone.utc)
+            out: list[SessionRecord] = []
+            seeds = [
+                ("FTP Builder 2x8", 34 * 60, 210.0, 86.0, 31.5, 92.0, 88.0, 84.0, True),
+                ("VO2 Burst 5x3", 42 * 60, 238.0, 91.0, 33.2, 85.0, 82.0, 77.0, True),
+                ("Tempo 45", 45 * 60, 196.0, 83.5, 30.1, 90.0, 86.0, 83.0, True),
+                ("Recovery Spin", 30 * 60, 128.0, 88.0, 27.3, 96.0, 95.0, 94.0, True),
+                ("Sweet Spot 3x12", 58 * 60, 224.0, 84.0, 31.0, 82.0, 80.0, 74.0, False),
+                ("Cadence Drill", 36 * 60, 172.0, 98.0, 29.7, 88.0, 93.0, 84.0, True),
+                ("Over-Under 4x9", 52 * 60, 231.0, 87.2, 32.1, 79.0, 77.0, 70.0, False),
+                ("Endurance 60", 60 * 60, 182.0, 82.3, 29.2, 93.0, 91.0, 89.0, True),
+            ]
+            for idx, item in enumerate(seeds):
+                (
+                    name,
+                    elapsed,
+                    avg_power,
+                    avg_cadence,
+                    avg_speed,
+                    p_comp,
+                    rpm_comp,
+                    both_comp,
+                    completed,
+                ) = item
+                ended = now - timedelta(days=idx)
+                started = ended - timedelta(seconds=elapsed)
+                out.append(
+                    SessionRecord(
+                        started_at_utc=started.isoformat(),
+                        ended_at_utc=ended.isoformat(),
+                        workout_name=name,
+                        target_mode="erg",
+                        ftp_watts=220,
+                        completed=completed,
+                        planned_duration_sec=elapsed,
+                        elapsed_duration_sec=elapsed,
+                        distance_km=(avg_speed * (elapsed / 3600.0)),
+                        avg_power_watts=avg_power,
+                        avg_cadence_rpm=avg_cadence,
+                        avg_speed_kmh=avg_speed,
+                        power_compliance_pct=p_comp,
+                        rpm_compliance_pct=rpm_comp,
+                        both_compliance_pct=both_comp,
+                    )
+                )
+            return out
+
         rows: list[dict[str, str]] = []
-        for item in load_recent_sessions(limit=12):
+        sessions = demo_sessions() if analytics_demo_mode else load_recent_sessions(limit=30)
+        for item in sessions[:12]:
             snapshot_hint = item.ended_at_utc.replace(":", "-").split(".")[0]
             rows.append(
                 {
@@ -841,7 +1672,73 @@ def run_web_ui(
         history.rows = rows
         history.update()
 
+        if not sessions:
+            analytics_sessions.text = "Sessions: 0"
+            analytics_completed.text = "Completion: -"
+            analytics_compliance.text = "Compliance (both): -"
+            analytics_time.text = "Total time: 0 min"
+            analytics_power.text = "Avg power: -"
+            analytics_cadence.text = "Avg cadence: -"
+            analytics_speed.text = "Avg speed: -"
+            return
+
+        completed_count = sum(1 for s in sessions if s.completed)
+        total_count = len(sessions)
+        completion_pct = (completed_count * 100.0) / max(1, total_count)
+        total_min = sum(max(0, s.elapsed_duration_sec) for s in sessions) // 60
+
+        both_vals = [s.both_compliance_pct for s in sessions if s.both_compliance_pct is not None]
+        avg_power_vals = [s.avg_power_watts for s in sessions if s.avg_power_watts is not None]
+        avg_cadence_vals = [s.avg_cadence_rpm for s in sessions if s.avg_cadence_rpm is not None]
+        avg_speed_vals = [s.avg_speed_kmh for s in sessions if s.avg_speed_kmh is not None]
+
+        avg_both = (sum(both_vals) / len(both_vals)) if both_vals else None
+        avg_power = (sum(avg_power_vals) / len(avg_power_vals)) if avg_power_vals else None
+        avg_cadence = (sum(avg_cadence_vals) / len(avg_cadence_vals)) if avg_cadence_vals else None
+        avg_speed = (sum(avg_speed_vals) / len(avg_speed_vals)) if avg_speed_vals else None
+
+        analytics_sessions.text = f"Sessions: {total_count}"
+        analytics_completed.text = (
+            f"Completion: {completion_pct:.0f}% ({completed_count}/{total_count})"
+        )
+        analytics_compliance.text = (
+            f"Compliance (both): {avg_both:.0f}%"
+            if avg_both is not None
+            else "Compliance (both): -"
+        )
+        analytics_time.text = f"Total time: {total_min} min"
+        analytics_power.text = (
+            f"Avg power: {avg_power:.0f} W" if avg_power is not None else "Avg power: -"
+        )
+        analytics_cadence.text = (
+            f"Avg cadence: {avg_cadence:.1f} rpm"
+            if avg_cadence is not None
+            else "Avg cadence: -"
+        )
+        analytics_speed.text = (
+            f"Avg speed: {avg_speed:.1f} km/h" if avg_speed is not None else "Avg speed: -"
+        )
+
+        # Trend chart (oldest -> newest) based on selected session window.
+        windowed = list(reversed(sessions[: max(1, analytics_window)]))
+        labels: list[str] = []
+        compliance_points: list[float | None] = []
+        power_points: list[float | None] = []
+        for idx, s in enumerate(windowed, start=1):
+            date_hint = s.ended_at_utc[:10]
+            labels.append(f"{idx}|{date_hint}")
+            compliance_points.append(s.both_compliance_pct)
+            power_points.append(s.avg_power_watts)
+
+        trend_opts = cast(dict[str, Any], analytics_trend_chart.options)
+        trend_opts["xAxis"]["data"] = labels
+        trend_opts["series"][0]["data"] = compliance_points
+        trend_opts["series"][1]["data"] = power_points
+        analytics_trend_chart.update()
+
     def refresh_plan_chart() -> None:
+        if plan_chart is None:
+            return
         options = cast(dict[str, Any], plan_chart.options)
         if state.workout is None:
             options["xAxis"]["data"] = []
@@ -864,6 +1761,8 @@ def run_web_ui(
         plan_chart.update()
 
     def refresh_live_chart() -> None:
+        if live_chart is None:
+            return
         options = cast(dict[str, Any], live_chart.options)
         cadence_expected = timeline_expected_cadence[:]
         if cadence_expected and all(abs(v) < 0.1 for v in cadence_expected):
@@ -903,9 +1802,22 @@ def run_web_ui(
 
     def refresh_ui() -> None:
         nonlocal last_coaching_alert_key, sound_alerts
+        nonlocal last_encourage_bucket
         status_label.text = f"Status: {state.status}"
+        ht_icon.style(f"color: {'#22c55e' if state.connected else '#6b7280'};")
+        hm_icon.style(f"color: {'#22c55e' if state.hm_connected else '#6b7280'};")
+        hm_hint_label.text = (
+            "HM: connected"
+            if state.hm_connected
+            else ("HM: detected" if hm_detected else "HM: not detected")
+        )
         kpi_power.text = _fmt_power(state.power)
         kpi_cadence.text = _fmt_cadence(state.cadence)
+        kpi_hr.text = (
+            f"{int(round(state.heart_rate_bpm))} bpm"
+            if state.heart_rate_bpm is not None
+            else "-- bpm"
+        )
         kpi_speed.text = _fmt_speed(state.speed)
         kpi_distance.text = f"{_fmt_number(state.distance_km, 2)} km"
         mode_label.text = f"Mode: {state.mode.upper()}"
@@ -915,6 +1827,42 @@ def run_web_ui(
             course_info.text = f"{state.workout.name} | total {total} | mode {state.mode.upper()}"
         else:
             course_info.text = "No course loaded"
+        shown_score = (
+            goal_tracker.score + pinball_score_bonus if pinball_mode else goal_tracker.score
+        )
+        game_score_label.text = f"Score: {shown_score}"
+        game_coins_label.text = f"Coins: {goal_tracker.coins}"
+        game_streak_label.text = f"Streak: {goal_tracker.streak}"
+        current_goal = goal_tracker.current_goal
+        if current_goal is None:
+            game_goal_label.text = "Goal: session clear"
+            game_goal_progress_label.text = "--"
+            if pinball_mode:
+                pinball_mission_label.text = "MISSION: Clear workout"
+        else:
+            game_goal_label.text = f"Goal: {current_goal.definition.title}"
+            game_goal_progress_label.text = (
+                f"{int(current_goal.progress_sec)}/{int(current_goal.definition.target_sec)} s"
+            )
+            if pinball_mode:
+                pinball_mission_label.text = (
+                    "MISSION: "
+                    f"{current_goal.definition.title} "
+                    f"[{int(current_goal.progress_sec)}/{int(current_goal.definition.target_sec)}s]"
+                )
+        if pinball_mode:
+            _safe_run_js("window.veloxDmd.init();")
+            pinball_multiplier_label.text = f"MULTI x{pinball_multiplier}"
+            pinball_jackpot_label.text = f"JACKPOT {pinball_jackpots}"
+            pinball_reward_label.text = f"BONUS {pinball_last_bonus}"
+            step_txt = "-"
+            if state.progress is not None:
+                step_txt = f"{state.progress.step_index}/{state.progress.step_total}"
+            dmd_msg = (
+                f"S{shown_score} Mx{pinball_multiplier} J{pinball_jackpots} "
+                f"STEP {step_txt}"
+            )
+            _safe_run_js(f"window.veloxDmd.ticker('{dmd_msg}');")
 
         expected_power_min = None
         expected_power_max = None
@@ -950,6 +1898,7 @@ def run_web_ui(
             guidance_label.style("color: #cbd5e1; font-weight: 600;")
             coaching_stabilizer.reset()
             last_coaching_alert_key = None
+            last_encourage_bucket = None
         target_bits: list[str] = []
         if expected_power_min is not None and expected_power_max is not None:
             target_bits.append(f"Power {expected_power_min}-{expected_power_max}W")
@@ -980,6 +1929,8 @@ def run_web_ui(
         kpi_cadence.style(f"color: {cadence_color};")
         kpi_speed.style("color: #22d3ee;")
         kpi_distance.style("color: #ffffff;")
+        in_zone_for_scene = power_in_zone is True and cadence_in_zone is True
+        scene_action = "steady"
 
         if state.progress is not None:
             raw_signal = compute_coaching_signal(
@@ -993,13 +1944,17 @@ def run_web_ui(
             stable_signal, changed = coaching_stabilizer.update(raw_signal, time.monotonic())
             guidance_label.text = stable_signal.text
             guidance_label.style(f"color: {stable_signal.color}; font-weight: 700;")
+            if stable_signal.key in {"power_low", "cadence_low", "dual_pl_cl", "dual_ph_cl"}:
+                scene_action = "up"
+            elif stable_signal.key in {"power_high", "cadence_high", "dual_pl_ch", "dual_ph_ch"}:
+                scene_action = "down"
             if (
                 changed
                 and sound_alerts
                 and stable_signal.severity in {"warn", "bad"}
                 and stable_signal.key != last_coaching_alert_key
             ):
-                ui.run_javascript(
+                _safe_run_js(
                     """
                     (() => {
                       const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1017,6 +1972,42 @@ def run_web_ui(
                 )
             last_coaching_alert_key = stable_signal.key
 
+            # Classic coaching cues near the rider:
+            # - encouragement pulses
+            if not pinball_mode:
+                elapsed = int(state.progress.elapsed_total_sec)
+                encourage_bucket = elapsed // 12
+                if encourage_bucket != last_encourage_bucket:
+                    last_encourage_bucket = encourage_bucket
+                    if power_in_zone is True and cadence_in_zone is True:
+                        _safe_run_js(
+                            "window.veloxCoachCue("
+                            "'coach', 'Excellent, garde ce rythme!', 1700);"
+                        )
+                    elif scene_action == "up":
+                        _safe_run_js(
+                            "window.veloxCoachCue("
+                            "'coach', 'Allez, monte un peu!', 1700);"
+                        )
+                    elif scene_action == "down":
+                        _safe_run_js(
+                            "window.veloxCoachCue("
+                            "'coach', 'Souple, reduis legerement', 1700);"
+                        )
+                    else:
+                        _safe_run_js(
+                            "window.veloxCoachCue("
+                            "'coach', 'Stable, continue', 1600);"
+                        )
+        _safe_run_js(
+            "window.veloxUpdateScene("
+            f"{state.speed if state.speed is not None else 0},"
+            f"{state.cadence if state.cadence is not None else 0},"
+            f"{'true' if in_zone_for_scene else 'false'},"
+            f"'{scene_action}'"
+            ");"
+        )
+
         p = pct(zone_compliance["power_ok"], zone_compliance["power_total"])
         r = pct(zone_compliance["rpm_ok"], zone_compliance["rpm_total"])
         if p is None and r is None:
@@ -1032,47 +2023,75 @@ def run_web_ui(
         start_btn.set_enabled(state.connected and state.workout is not None)
         stop_btn.set_enabled(state.progress is not None)
         back_btn.set_enabled(state.progress is None)
-        connect_btn.set_enabled(not state.connected)
-        disconnect_btn.set_enabled(state.connected)
+        ht_connect_btn.set_enabled(not state.connected)
+        ht_disconnect_btn.set_enabled(state.connected)
+        hm_connect_btn.set_enabled(hm_detected and not state.hm_connected)
+        hm_disconnect_btn.set_enabled(state.hm_connected)
         export_json_btn.set_enabled(current_snapshot_path is not None)
         export_csv_btn.set_enabled(current_snapshot_csv_path is not None)
         refresh_plan_chart()
         refresh_live_chart()
 
-    async def on_scan() -> None:
+    async def on_scan_ht() -> None:
         nonlocal devices, selected_device_address
-        state.status = "Scanning..."
+        state.status = "Scanning HT..."
         refresh_ui()
         devices = await controller.scan()
         options = {f"{d.name} ({d.address})": d.address for d in devices}
-        device_select.options = options
+        ht_device_select.options = options
         if options:
             selected_device_address = next(iter(options.values()))
-            device_select.value = selected_device_address
-        state.status = f"Scan done: {len(devices)} devices"
+            ht_device_select.value = selected_device_address
+        state.status = f"HT scan done: {len(devices)} devices"
         refresh_ui()
 
-    async def on_connect() -> None:
+    async def on_connect_ht() -> None:
         nonlocal selected_device_address
-        selected_device_address = cast(str | None, device_select.value)
+        selected_device_address = cast(str | None, ht_device_select.value)
         if not selected_device_address:
-            state.status = "Select a device first"
+            state.status = "Select an HT device first"
             refresh_ui()
             return
-        state.status = "Connecting..."
+        state.status = "Connecting HT..."
         refresh_ui()
         label = await controller.connect(
             target=selected_device_address,
             metrics_callback=on_metrics,
         )
         state.connected = True
-        state.status = f"Connected: {label}"
+        state.status = f"HT connected: {label}"
         refresh_ui()
 
-    async def on_disconnect() -> None:
+    async def on_disconnect_ht() -> None:
         await controller.disconnect()
         state.connected = False
-        state.status = "Disconnected"
+        state.status = "HT disconnected"
+        refresh_ui()
+
+    def on_detect_hm() -> None:
+        nonlocal hm_detected
+        hm_detected = bool(hm_sim_switch.value)
+        if hm_detected:
+            state.status = "HM detected (simulated)"
+        else:
+            state.hm_connected = False
+            state.heart_rate_bpm = None
+            state.status = "HM not detected"
+        refresh_ui()
+
+    def on_connect_hm() -> None:
+        if not hm_detected:
+            state.status = "Detect HM first"
+            refresh_ui()
+            return
+        state.hm_connected = True
+        state.status = "HM connected"
+        refresh_ui()
+
+    def on_disconnect_hm() -> None:
+        state.hm_connected = False
+        state.heart_rate_bpm = None
+        state.status = "HM disconnected"
         refresh_ui()
 
     def build_expected_timeline() -> None:
@@ -1113,6 +2132,10 @@ def run_web_ui(
         timeline_actual_cadence.append(None)
 
     def on_metrics(metrics: IndoorBikeData) -> None:
+        nonlocal last_goal_tick_ts
+        nonlocal pinball_score_bonus, pinball_multiplier, pinball_jackpots
+        nonlocal pinball_last_bonus, pinball_last_step_seen, pinball_last_jackpot_ts
+        nonlocal hm_sim_seed
         now = asyncio.get_event_loop().time()
         if state.last_ts is not None and metrics.instantaneous_speed_kmh is not None:
             state.distance_km += (
@@ -1122,6 +2145,20 @@ def run_web_ui(
         state.power = metrics.instantaneous_power
         state.cadence = metrics.instantaneous_cadence
         state.speed = metrics.instantaneous_speed_kmh
+        hm_simulate = bool(hm_sim_switch.value)
+        if state.hm_connected and hm_simulate:
+            base = 88.0
+            if state.power is not None:
+                base += state.power * 0.20
+            if state.cadence is not None:
+                base += max(0.0, state.cadence - 70.0) * 0.35
+            phase = (state.progress.elapsed_total_sec if state.progress else now) / 9.0
+            wobble = 3.0 * math.sin(phase)
+            target_hr = max(78.0, min(196.0, base + wobble))
+            hm_sim_seed = (hm_sim_seed * 0.82) + (target_hr * 0.18)
+            state.heart_rate_bpm = int(round(hm_sim_seed))
+        else:
+            state.heart_rate_bpm = None
         metric_samples.append(
             (
                 metrics.instantaneous_power,
@@ -1131,6 +2168,8 @@ def run_web_ui(
         )
 
         if state.progress:
+            power_zone_ok: bool | None = None
+            cadence_zone_ok: bool | None = None
             if (
                 metrics.instantaneous_power is not None
                 and state.progress.expected_power_min_watts is not None
@@ -1143,6 +2182,9 @@ def run_web_ui(
                     <= state.progress.expected_power_max_watts
                 ):
                     zone_compliance["power_ok"] += 1
+                    power_zone_ok = True
+                else:
+                    power_zone_ok = False
 
             if (
                 metrics.instantaneous_cadence is not None
@@ -1156,6 +2198,9 @@ def run_web_ui(
                     <= state.progress.expected_cadence_max_rpm
                 ):
                     zone_compliance["rpm_ok"] += 1
+                    cadence_zone_ok = True
+                else:
+                    cadence_zone_ok = False
 
             if timeline_labels:
                 idx = min(
@@ -1166,6 +2211,38 @@ def run_web_ui(
                     timeline_actual_power[idx] = metrics.instantaneous_power
                 if metrics.instantaneous_cadence is not None:
                     timeline_actual_cadence[idx] = metrics.instantaneous_cadence
+            dt_goal = 0.8
+            if last_goal_tick_ts is not None:
+                dt_goal = max(0.1, min(2.0, now - last_goal_tick_ts))
+            last_goal_tick_ts = now
+            goal_tracker.update(
+                power_in_zone=power_zone_ok,
+                cadence_in_zone=cadence_zone_ok,
+                dt_sec=dt_goal,
+            )
+            if pinball_mode:
+                if pinball_last_step_seen == 0:
+                    pinball_last_step_seen = state.progress.step_index
+                elif state.progress.step_index != pinball_last_step_seen:
+                    in_zone = power_zone_ok is not False and cadence_zone_ok is not False
+                    if in_zone:
+                        trigger_pinball_event("multi")
+                        trigger_pinball_pattern("step_clear")
+                    else:
+                        pinball_last_bonus = "COMBO BREAK"
+                        pinball_multiplier = 1
+                    pinball_last_step_seen = state.progress.step_index
+
+                expected_hi = state.progress.expected_power_max_watts
+                if (
+                    expected_hi is not None
+                    and state.ftp_watts > 0
+                    and expected_hi >= int(state.ftp_watts * 0.95)
+                    and power_zone_ok is True
+                    and cadence_zone_ok is not False
+                ):
+                    trigger_pinball_event("jackpot")
+                    trigger_pinball_pattern("jackpot_rush")
 
     def on_progress(progress: WorkoutProgress) -> None:
         state.progress = progress
@@ -1178,7 +2255,12 @@ def run_web_ui(
         refresh_ui()
 
     async def on_start() -> None:
-        nonlocal session_started_at_utc, current_snapshot_path, current_snapshot_csv_path
+        nonlocal session_started_at_utc
+        nonlocal current_snapshot_path
+        nonlocal current_snapshot_csv_path
+        nonlocal last_goal_tick_ts
+        nonlocal pinball_score_bonus, pinball_multiplier, pinball_jackpots
+        nonlocal pinball_last_bonus, pinball_last_step_seen, pinball_last_jackpot_ts
         if state.workout is None:
             return
         zone_compliance["power_ok"] = 0
@@ -1190,6 +2272,14 @@ def run_web_ui(
         state.last_ts = None
         metric_samples.clear()
         coaching_stabilizer.reset()
+        goal_tracker.reset()
+        pinball_score_bonus = 0
+        pinball_multiplier = 1
+        pinball_jackpots = 0
+        pinball_last_bonus = "READY"
+        pinball_last_step_seen = 0
+        pinball_last_jackpot_ts = 0.0
+        last_goal_tick_ts = None
         session_started_at_utc = now_utc_iso()
         current_snapshot_path = None
         current_snapshot_csv_path = None
@@ -1296,16 +2386,12 @@ def run_web_ui(
         refresh_templates()
         refresh_ui()
 
-    def on_strict_change() -> None:
-        nonlocal strict_mode
-        strict_mode = bool(strict_switch.value)
-        apply_layout_mode()
+    def on_open_connections() -> None:
+        show_connections_screen()
         refresh_ui()
 
-    def on_preset_change() -> None:
-        nonlocal viewport_preset
-        viewport_preset = str(preset_select.value or "auto")
-        apply_layout_mode()
+    def on_back_to_training_setup() -> None:
+        show_setup_screen()
         refresh_ui()
 
     def on_ftp_or_mode_change() -> None:
@@ -1316,15 +2402,31 @@ def run_web_ui(
         nonlocal sound_alerts
         sound_alerts = bool(sound_toggle.value)
 
+    def on_analytics_demo_toggle() -> None:
+        nonlocal analytics_demo_mode
+        analytics_demo_mode = bool(analytics_demo_switch.value)
+        refresh_history()
+        refresh_ui()
+
+    def on_analytics_window_change() -> None:
+        nonlocal analytics_window
+        analytics_window = int(analytics_window_select.value or 7)
+        refresh_history()
+
     band_select.on_value_change(lambda _: refresh_templates())
     ftp_input.on_value_change(lambda _: on_ftp_or_mode_change())
     mode_select.on_value_change(lambda _: on_ftp_or_mode_change())
-    strict_switch.on_value_change(lambda _: on_strict_change())
-    preset_select.on_value_change(lambda _: on_preset_change())
     sound_toggle.on_value_change(lambda _: on_sound_toggle())
-    scan_btn.on_click(on_scan)
-    connect_btn.on_click(on_connect)
-    disconnect_btn.on_click(on_disconnect)
+    analytics_demo_switch.on_value_change(lambda _: on_analytics_demo_toggle())
+    analytics_window_select.on_value_change(lambda _: on_analytics_window_change())
+    open_connections_btn.on_click(on_open_connections)
+    back_to_training_btn.on_click(on_back_to_training_setup)
+    ht_scan_btn.on_click(on_scan_ht)
+    ht_connect_btn.on_click(on_connect_ht)
+    ht_disconnect_btn.on_click(on_disconnect_ht)
+    hm_detect_btn.on_click(on_detect_hm)
+    hm_connect_btn.on_click(on_connect_hm)
+    hm_disconnect_btn.on_click(on_disconnect_hm)
     builder_btn.on_click(on_open_builder)
     add_step_btn.on_click(on_add_builder_step)
     remove_last_step_btn.on_click(on_remove_builder_step)
@@ -1335,6 +2437,11 @@ def run_web_ui(
     back_btn.on_click(on_back_to_setup)
     export_json_btn.on_click(on_export_json)
     export_csv_btn.on_click(on_export_csv)
+    if pinball_mode and simulate_ht:
+        sim_multi_btn.on_click(lambda: trigger_pinball_event("multi", manual=True))
+        sim_jackpot_btn.on_click(lambda: trigger_pinball_event("jackpot", manual=True))
+        sim_bonus_btn.on_click(lambda: trigger_pinball_event("bonus", manual=True))
+        sim_chain_btn.on_click(lambda: trigger_pinball_pattern("jackpot_rush"))
 
     refresh_templates()
     refresh_history()

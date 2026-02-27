@@ -40,6 +40,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Countdown in seconds before sending first workout target in web UI",
     )
     parser.add_argument(
+        "--ui-theme",
+        choices=["classic", "pinball"],
+        default="classic",
+        help="Visual theme for --ui-web",
+    )
+    parser.add_argument(
         "--connect",
         nargs="?",
         const="auto",
@@ -116,6 +122,7 @@ def main() -> int:
             host=args.web_host,
             port=args.web_port,
             start_delay_sec=max(0, int(args.web_start_delay)),
+            ui_theme=args.ui_theme,
         )
 
     if args.scan:
