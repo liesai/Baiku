@@ -255,6 +255,19 @@ def run_web_ui(
             display: block;
             image-rendering: pixelated;
           }
+          .mini-graph-shell {
+            border: 1px solid rgba(56, 189, 248, 0.28);
+            border-radius: 10px;
+            background: rgba(2, 6, 23, 0.35);
+            padding: 6px;
+          }
+          .mini-graph {
+            width: 100%;
+            height: 86px;
+            display: block;
+            border-radius: 8px;
+            background: rgba(2, 6, 23, 0.55);
+          }
           .gb-pixel {
             font-family: "Courier New", monospace;
             font-weight: 700;
@@ -583,7 +596,7 @@ def run_web_ui(
                   const px = (x + 0.5) * cw;
                   const py = (y + 0.5) * ch;
                   const idx = ((y * cols) + x) * 4;
-                  const lit = frame[idx] > 30 || frame[idx + 3] > 30;
+                  const lit = frame[idx] > 30;
                   ctx.fillStyle = lit ? glow : base;
                   ctx.beginPath();
                   ctx.arc(px, py, Math.min(cw, ch) * (lit ? 0.34 : 0.23), 0, Math.PI * 2);
@@ -680,6 +693,9 @@ def run_web_ui(
                 inZone = false;
               }
               window.veloxUpdateScene(speed, cadence, inZone, action);
+              if (window.veloxMiniGraph) {
+                window.veloxMiniGraph.push(parseVal('ve-kpi-power'), cadence);
+              }
 
               const score = textOf('ve-score');
               const multi = textOf('ve-pinball-multi');
@@ -701,6 +717,63 @@ def run_web_ui(
           window.addEventListener('DOMContentLoaded', () => {
             window.veloxCspSafeUiLoop();
           });
+          window.veloxMiniGraph = (function() {
+            let canvas = null;
+            let ctx = null;
+            const power = [];
+            const cadence = [];
+            const maxPoints = 90;
+            function draw() {
+              if (!ctx || !canvas) return;
+              const w = canvas.width;
+              const h = canvas.height;
+              ctx.fillStyle = '#040912';
+              ctx.fillRect(0, 0, w, h);
+              ctx.strokeStyle = 'rgba(148,163,184,.22)';
+              ctx.lineWidth = 1;
+              for (let i = 1; i <= 3; i += 1) {
+                const y = (h / 4) * i;
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(w, y);
+                ctx.stroke();
+              }
+              const drawLine = (arr, color, maxv) => {
+                if (!arr.length) return;
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                arr.forEach((v, i) => {
+                  const x = (i / Math.max(1, maxPoints - 1)) * w;
+                  const y = h - Math.max(0, Math.min(1, v / maxv)) * (h - 6) - 3;
+                  if (i === 0) ctx.moveTo(x, y);
+                  else ctx.lineTo(x, y);
+                });
+                ctx.stroke();
+              };
+              drawLine(power, '#22d3ee', 420);
+              drawLine(cadence, '#86efac', 130);
+            }
+            return {
+              init: function() {
+                canvas = document.getElementById('ve-mini-graph');
+                if (!canvas) return;
+                ctx = canvas.getContext('2d');
+                const rect = canvas.getBoundingClientRect();
+                canvas.width = Math.max(320, Math.floor(rect.width));
+                canvas.height = Math.max(86, Math.floor(rect.height));
+                draw();
+              },
+              push: function(p, c) {
+                if (!canvas || !ctx) this.init();
+                power.push(Number.isFinite(p) ? Number(p) : 0);
+                cadence.push(Number.isFinite(c) ? Number(c) : 0);
+                while (power.length > maxPoints) power.shift();
+                while (cadence.length > maxPoints) cadence.shift();
+                draw();
+              },
+            };
+          })();
         </script>
         """
         .replace("__SPRITE_URL__", SPRITE_URL)
@@ -871,6 +944,15 @@ def run_web_ui(
             .replace("__DMD_CYCLIST_URL__", DMD_CYCLIST_URL)
         ).classes("w-full")
         pinball_dmd.set_visibility(pinball_mode)
+
+        pinball_mini_graph = ui.html(
+            """
+            <div class="mini-graph-shell">
+              <canvas id="ve-mini-graph" class="mini-graph"></canvas>
+            </div>
+            """
+        ).classes("w-full")
+        pinball_mini_graph.set_visibility(pinball_mode)
 
         with ui.row().classes("w-full gap-2") as pinball_sim_row:
             ui.label("Sim Pinball").classes("pinball-chip")
