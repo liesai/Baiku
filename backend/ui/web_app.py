@@ -178,6 +178,7 @@ def run_web_ui(
     controller = UIController(debug_ftms=False, simulate_ht=simulate_ht)
     state = WebState()
     pinball_mode = ui_theme == "pinball"
+    csp_safe_mode = pinball_mode
     ui.add_head_html(
         """
         <style>
@@ -790,6 +791,8 @@ def run_web_ui(
 
         with ui.row().classes("w-full gap-2") as pinball_hud_row:
             ui.label("MODE: PINBALL").classes("pinball-chip")
+            if csp_safe_mode:
+                ui.label("CSP-SAFE").classes("pinball-chip")
             pinball_mission_label = ui.label("MISSION: Keep target zone").classes("pinball-chip")
             pinball_multiplier_label = ui.label("MULTI x1").classes("pinball-chip")
             pinball_jackpot_label = ui.label("JACKPOT 0").classes("pinball-chip pinball-jackpot")
@@ -1086,6 +1089,8 @@ def run_web_ui(
 
     def _safe_run_js(code: str) -> None:
         """Best-effort JS execution; skip when timer/background has no slot/client context."""
+        if csp_safe_mode:
+            return
         if core.loop is None:
             return
         try:
