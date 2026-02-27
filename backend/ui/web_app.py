@@ -46,8 +46,6 @@ ASSETS_ROUTE = "/velox-assets"
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 SPRITE_URL = f"{ASSETS_ROUTE}/cyclist_sprite_aligned.png"
 SCENE_BG_URL = f"{ASSETS_ROUTE}/forest_bg.png"
-SCENE_BG_ALT_1_URL = f"{ASSETS_ROUTE}/forest_bg_alt_1.jpg"
-SCENE_BG_ALT_2_URL = f"{ASSETS_ROUTE}/forest_bg_alt_2.jpg"
 DMD_CYCLIST_URL = f"{ASSETS_ROUTE}/dmd_cyclist_bonus.png"
 _ASSETS_MOUNTED = False
 
@@ -373,20 +371,6 @@ def run_web_ui(
             background-position-x: var(--ve-bg-offset);
             filter: saturate(1.05) contrast(1.02);
           }
-          .ve-bg-alt-1,
-          .ve-bg-alt-2 {
-            opacity: 0;
-            background-position-x: calc(var(--ve-bg-offset) * 0.72);
-            transition: opacity .8s ease;
-          }
-          .ve-bg-alt-1 {
-            background-image: url('__SCENE_BG_ALT_1_URL__');
-            filter: saturate(1.08) contrast(1.03) brightness(1.03);
-          }
-          .ve-bg-alt-2 {
-            background-image: url('__SCENE_BG_ALT_2_URL__');
-            filter: saturate(1.06) contrast(1.04) brightness(1.02);
-          }
           .ve-rider {
             position: absolute;
             left: 74px;
@@ -475,14 +459,12 @@ def run_web_ui(
           .ve-dot.jackpot { color: #facc15; background: #facc15; }
         </style>
         <script>
-          window.veloxUpdateScene = function(speed, cadence, inZone, action, elapsedSec) {
+          window.veloxUpdateScene = function(speed, cadence, inZone, action) {
             const scene = document.getElementById('ve-scene');
             if (!scene) return;
             const speedNode = document.getElementById('ve-scene-speed');
             const actionNode = document.getElementById('ve-scene-action');
             const spriteNode = document.getElementById('ve-sprite');
-            const alt1Node = document.querySelector('#ve-scene .ve-bg-alt-1');
-            const alt2Node = document.querySelector('#ve-scene .ve-bg-alt-2');
             const state = window.__velox_scene_state || {
               bg: 0,
               pedal: 0,
@@ -501,10 +483,6 @@ def run_web_ui(
             scene.style.setProperty('--ve-rider-bob', `${bob}px`);
             scene.dataset.zone = inZone ? 'ok' : 'bad';
             scene.dataset.action = action || 'steady';
-            const elapsed = Math.max(0, Number(elapsedSec || 0));
-            const bgIndex = Math.floor(elapsed / 40) % 3;
-            if (alt1Node) alt1Node.style.opacity = bgIndex === 1 ? '0.72' : '0';
-            if (alt2Node) alt2Node.style.opacity = bgIndex === 2 ? '0.68' : '0';
             if (spriteNode) {
               const frame = Math.floor(state.frameTick) % 3;
               const x = frame * 50;
@@ -822,8 +800,6 @@ def run_web_ui(
         """
         .replace("__SPRITE_URL__", SPRITE_URL)
         .replace("__SCENE_BG_URL__", SCENE_BG_URL)
-        .replace("__SCENE_BG_ALT_1_URL__", SCENE_BG_ALT_1_URL)
-        .replace("__SCENE_BG_ALT_2_URL__", SCENE_BG_ALT_2_URL)
         .replace("__DMD_CYCLIST_URL__", DMD_CYCLIST_URL)
     )
 
@@ -852,7 +828,6 @@ def run_web_ui(
     pinball_last_bonus = "READY"
     pinball_last_step_seen = 0
     pinball_last_jackpot_ts = 0.0
-    last_phase_notice_key: str | None = None
     last_encourage_bucket: int | None = None
 
     timeline_labels: list[str] = []
@@ -947,6 +922,18 @@ def run_web_ui(
             export_csv_btn = ui.button("Export last CSV")
             export_json_btn.disable()
             export_csv_btn.disable()
+
+        ui.label("Analytics").classes("text-base font-medium")
+        with ui.card().classes("w-full gb-card gb-compact"):
+            with ui.grid().classes("w-full grid-cols-2 md:grid-cols-4 gap-2"):
+                analytics_sessions = ui.label("Sessions: 0").classes("text-sm")
+                analytics_completed = ui.label("Completion: -").classes("text-sm")
+                analytics_compliance = ui.label("Compliance (both): -").classes("text-sm")
+                analytics_time = ui.label("Total time: 0 min").classes("text-sm")
+            with ui.grid().classes("w-full grid-cols-1 md:grid-cols-3 gap-2"):
+                analytics_power = ui.label("Avg power: -").classes("text-sm")
+                analytics_cadence = ui.label("Avg cadence: -").classes("text-sm")
+                analytics_speed = ui.label("Avg speed: -").classes("text-sm")
 
     with ui.column().classes("w-full gap-2") as workout_view:
         with ui.row().classes("w-full items-center justify-between"):
@@ -1047,8 +1034,6 @@ def run_web_ui(
                 """
                 <div id="ve-scene" class="ve-scene" data-zone="ok">
                   <div class="ve-bg ve-bg-main"></div>
-                  <div class="ve-bg ve-bg-alt-1"></div>
-                  <div class="ve-bg ve-bg-alt-2"></div>
                   <div id="ve-fx" class="ve-fx">BONUS!</div>
                   <div class="ve-hud">
                     <span id="ve-scene-action" class="ve-hud-action">HOLD</span>
@@ -1526,7 +1511,8 @@ def run_web_ui(
 
     def refresh_history() -> None:
         rows: list[dict[str, str]] = []
-        for item in load_recent_sessions(limit=12):
+        sessions = load_recent_sessions(limit=30)
+        for item in sessions[:12]:
             snapshot_hint = item.ended_at_utc.replace(":", "-").split(".")[0]
             rows.append(
                 {
@@ -1539,6 +1525,53 @@ def run_web_ui(
             )
         history.rows = rows
         history.update()
+
+        if not sessions:
+            analytics_sessions.text = "Sessions: 0"
+            analytics_completed.text = "Completion: -"
+            analytics_compliance.text = "Compliance (both): -"
+            analytics_time.text = "Total time: 0 min"
+            analytics_power.text = "Avg power: -"
+            analytics_cadence.text = "Avg cadence: -"
+            analytics_speed.text = "Avg speed: -"
+            return
+
+        completed_count = sum(1 for s in sessions if s.completed)
+        total_count = len(sessions)
+        completion_pct = (completed_count * 100.0) / max(1, total_count)
+        total_min = sum(max(0, s.elapsed_duration_sec) for s in sessions) // 60
+
+        both_vals = [s.both_compliance_pct for s in sessions if s.both_compliance_pct is not None]
+        avg_power_vals = [s.avg_power_watts for s in sessions if s.avg_power_watts is not None]
+        avg_cadence_vals = [s.avg_cadence_rpm for s in sessions if s.avg_cadence_rpm is not None]
+        avg_speed_vals = [s.avg_speed_kmh for s in sessions if s.avg_speed_kmh is not None]
+
+        avg_both = (sum(both_vals) / len(both_vals)) if both_vals else None
+        avg_power = (sum(avg_power_vals) / len(avg_power_vals)) if avg_power_vals else None
+        avg_cadence = (sum(avg_cadence_vals) / len(avg_cadence_vals)) if avg_cadence_vals else None
+        avg_speed = (sum(avg_speed_vals) / len(avg_speed_vals)) if avg_speed_vals else None
+
+        analytics_sessions.text = f"Sessions: {total_count}"
+        analytics_completed.text = (
+            f"Completion: {completion_pct:.0f}% ({completed_count}/{total_count})"
+        )
+        analytics_compliance.text = (
+            f"Compliance (both): {avg_both:.0f}%"
+            if avg_both is not None
+            else "Compliance (both): -"
+        )
+        analytics_time.text = f"Total time: {total_min} min"
+        analytics_power.text = (
+            f"Avg power: {avg_power:.0f} W" if avg_power is not None else "Avg power: -"
+        )
+        analytics_cadence.text = (
+            f"Avg cadence: {avg_cadence:.1f} rpm"
+            if avg_cadence is not None
+            else "Avg cadence: -"
+        )
+        analytics_speed.text = (
+            f"Avg speed: {avg_speed:.1f} km/h" if avg_speed is not None else "Avg speed: -"
+        )
 
     def refresh_plan_chart() -> None:
         if plan_chart is None:
@@ -1606,7 +1639,7 @@ def run_web_ui(
 
     def refresh_ui() -> None:
         nonlocal last_coaching_alert_key, sound_alerts
-        nonlocal last_phase_notice_key, last_encourage_bucket
+        nonlocal last_encourage_bucket
         status_label.text = f"Status: {state.status}"
         kpi_power.text = _fmt_power(state.power)
         kpi_cadence.text = _fmt_cadence(state.cadence)
@@ -1690,7 +1723,6 @@ def run_web_ui(
             guidance_label.style("color: #cbd5e1; font-weight: 600;")
             coaching_stabilizer.reset()
             last_coaching_alert_key = None
-            last_phase_notice_key = None
             last_encourage_bucket = None
         target_bits: list[str] = []
         if expected_power_min is not None and expected_power_max is not None:
@@ -1767,7 +1799,6 @@ def run_web_ui(
 
             # Classic coaching cues near the rider:
             # - encouragement pulses
-            # - phase transition countdown before next step
             if not pinball_mode:
                 elapsed = int(state.progress.elapsed_total_sec)
                 encourage_bucket = elapsed // 12
@@ -1793,29 +1824,12 @@ def run_web_ui(
                             "window.veloxCoachCue("
                             "'coach', 'Stable, continue', 1600);"
                         )
-
-                if state.workout and state.progress.step_index < state.progress.step_total:
-                    next_step = state.workout.steps[state.progress.step_index]
-                    sec_to_next = int(state.progress.remaining_sec)
-                    # Pre-alert window to prepare transition (Rouvy-like).
-                    if sec_to_next <= 12 and (sec_to_next % 2 == 0 or sec_to_next <= 3):
-                        notice_key = f"{state.progress.step_index}:{sec_to_next}"
-                        if notice_key != last_phase_notice_key:
-                            last_phase_notice_key = notice_key
-                            next_name = next_step.label or f"Step {state.progress.step_index + 1}"
-                            cue = f"Dans {sec_to_next}s: {next_name} ({next_step.target_watts}W)"
-                            _safe_run_js(
-                                f"window.veloxCoachCue('phase', {cue!r}, 2200);"
-                            )
-                else:
-                    last_phase_notice_key = None
         _safe_run_js(
             "window.veloxUpdateScene("
             f"{state.speed if state.speed is not None else 0},"
             f"{state.cadence if state.cadence is not None else 0},"
             f"{'true' if in_zone_for_scene else 'false'},"
-            f"'{scene_action}',"
-            f"{state.progress.elapsed_total_sec if state.progress is not None else 0}"
+            f"'{scene_action}'"
             ");"
         )
 
