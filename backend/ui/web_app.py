@@ -854,24 +854,28 @@ def run_web_ui(
     with ui.column().classes("w-full gap-4") as setup_view:
         ui.label("Course Setup").classes("text-xl font-semibold")
         with ui.card().classes("w-full gb-card"):
-            with ui.row().classes("w-full items-end gap-2"):
+            with ui.grid().classes("w-full grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2"):
                 band_select = ui.select(
                     ["All", "<=30 min", "30-45 min", "45-60 min", ">=60 min"],
                     value="All",
                     label="Duration",
+                ).classes("w-full min-w-[180px]")
+                ftp_input = ui.number("FTP (W)", value=220, min=80, max=500).classes(
+                    "w-full min-w-[140px]"
                 )
-                ftp_input = ui.number("FTP (W)", value=220, min=80, max=500)
                 mode_select = ui.select(
                     ["erg", "resistance", "slope"], value="erg", label="Mode"
-                )
+                ).classes("w-full min-w-[150px]")
                 delay_input = ui.number(
                     "Start delay (sec)", value=int(max(0, start_delay_sec)), min=0, max=180
-                )
-                builder_btn = ui.button("Workout builder")
+                ).classes("w-full min-w-[170px]")
+                builder_btn = ui.button("Workout builder").classes("w-full")
             selected_course_label = ui.label("Selected course: -").classes(
-                "text-sm font-medium"
+                "text-sm font-medium whitespace-normal break-words"
             )
-            course_cards_grid = ui.grid().classes("w-full grid-cols-1 md:grid-cols-3 gap-3")
+            course_cards_grid = ui.grid().classes(
+                "w-full grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3"
+            )
             course_info = ui.label("No course loaded").classes("text-sm text-slate-300")
 
         plan_chart = ui.echart(
@@ -1579,11 +1583,13 @@ def run_web_ui(
                 if selected:
                     card_classes += " ring-2 ring-cyan-400"
                 with ui.card().classes(f"{card_classes} gb-card") as card:
-                    ui.label(option.name).classes("text-base font-semibold")
+                    ui.label(option.name).classes(
+                        "text-base font-semibold whitespace-normal break-words"
+                    )
                     ui.label(
                         f"{option.category} | {_fmt_duration(option.duration_sec)} | "
                         f"{option.avg_intensity_pct}% FTP"
-                    ).classes("text-xs text-slate-300")
+                    ).classes("text-xs text-slate-300 whitespace-normal")
                     ui.label(
                         "Built-in" if option.source == "builtin" else f"Custom: {option.key}"
                     ).classes("text-xs text-slate-500")
