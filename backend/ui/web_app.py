@@ -1223,6 +1223,28 @@ def run_web_ui(
 
     workout_view.set_visibility(False)
 
+    with ui.column().classes("w-full gap-3") as summary_view:
+        with ui.row().classes("w-full items-center justify-between"):
+            ui.label("Session recap").classes("text-xl gb-title-neutral")
+            with ui.row().classes("gap-2"):
+                summary_export_json_btn = ui.button("Export JSON")
+                summary_export_csv_btn = ui.button("Export CSV")
+                summary_back_btn = ui.button("Back to setup").props("outline")
+        with ui.card().classes("w-full gb-card"):
+            summary_status_label = ui.label("Status: -").classes("text-base font-semibold")
+            with ui.grid().classes("w-full grid-cols-2 md:grid-cols-4 gap-2"):
+                summary_workout_label = ui.label("Workout: -").classes("text-sm")
+                summary_mode_label = ui.label("Mode: -").classes("text-sm")
+                summary_elapsed_label = ui.label("Elapsed: -").classes("text-sm")
+                summary_distance_label = ui.label("Distance: -").classes("text-sm")
+            with ui.grid().classes("w-full grid-cols-2 md:grid-cols-4 gap-2"):
+                summary_power_label = ui.label("Avg power: -").classes("text-sm")
+                summary_cadence_label = ui.label("Avg cadence: -").classes("text-sm")
+                summary_speed_label = ui.label("Avg speed: -").classes("text-sm")
+                summary_both_label = ui.label("Both compliance: -").classes("text-sm")
+
+    summary_view.set_visibility(False)
+
     with ui.dialog() as builder_dialog, ui.card().classes("w-[920px] max-w-[96vw] gb-card"):
         ui.label("Workout builder").classes("text-lg font-semibold")
         with ui.row().classes("w-full gap-2"):
@@ -1478,6 +1500,7 @@ def run_web_ui(
         connections_view.set_visibility(False)
         back_to_training_btn.set_visibility(False)
         workout_view.set_visibility(False)
+        summary_view.set_visibility(False)
 
     def show_connections_screen() -> None:
         setup_header.set_visibility(True)
@@ -1485,14 +1508,24 @@ def run_web_ui(
         connections_view.set_visibility(True)
         back_to_training_btn.set_visibility(True)
         workout_view.set_visibility(False)
+        summary_view.set_visibility(False)
 
     def show_workout_screen() -> None:
         setup_header.set_visibility(False)
         setup_view.set_visibility(False)
         connections_view.set_visibility(False)
         workout_view.set_visibility(True)
+        summary_view.set_visibility(False)
         if pinball_mode:
             _safe_run_js("window.veloxDmd.init();")
+
+    def show_summary_screen() -> None:
+        setup_header.set_visibility(True)
+        setup_view.set_visibility(False)
+        connections_view.set_visibility(False)
+        back_to_training_btn.set_visibility(False)
+        workout_view.set_visibility(False)
+        summary_view.set_visibility(True)
 
     def rebuild_workout_options() -> None:
         nonlocal workout_options, workout_option_by_label, workout_option_labels
@@ -2029,6 +2062,8 @@ def run_web_ui(
         hm_disconnect_btn.set_enabled(state.hm_connected)
         export_json_btn.set_enabled(current_snapshot_path is not None)
         export_csv_btn.set_enabled(current_snapshot_csv_path is not None)
+        summary_export_json_btn.set_enabled(current_snapshot_path is not None)
+        summary_export_csv_btn.set_enabled(current_snapshot_csv_path is not None)
         refresh_plan_chart()
         refresh_live_chart()
 
@@ -2248,10 +2283,38 @@ def run_web_ui(
         state.progress = progress
 
     def on_finish(completed: bool) -> None:
+        ended_workout_name = state.workout.name if state.workout is not None else "-"
+        elapsed_sec = state.progress.elapsed_total_sec if state.progress is not None else 0
+        both_pct = _compute_both_compliance_pct()
+        avg_power, avg_cadence, avg_speed = _compute_session_averages()
         _save_session_snapshot(completed)
         state.progress = None
         state.status = "Workout completed" if completed else "Workout stopped"
+        summary_status_label.text = (
+            "Status: Completed" if completed else "Status: Stopped"
+        )
+        summary_workout_label.text = f"Workout: {ended_workout_name}"
+        summary_mode_label.text = f"Mode: {state.mode.upper()} | FTP {state.ftp_watts}"
+        summary_elapsed_label.text = f"Elapsed: {_fmt_duration(elapsed_sec)}"
+        summary_distance_label.text = f"Distance: {_fmt_number(state.distance_km, 2)} km"
+        summary_power_label.text = (
+            f"Avg power: {avg_power:.0f} W" if avg_power is not None else "Avg power: -"
+        )
+        summary_cadence_label.text = (
+            f"Avg cadence: {avg_cadence:.1f} rpm"
+            if avg_cadence is not None
+            else "Avg cadence: -"
+        )
+        summary_speed_label.text = (
+            f"Avg speed: {avg_speed:.1f} km/h" if avg_speed is not None else "Avg speed: -"
+        )
+        summary_both_label.text = (
+            f"Both compliance: {both_pct:.0f}%"
+            if both_pct is not None
+            else "Both compliance: -"
+        )
         refresh_history()
+        show_summary_screen()
         refresh_ui()
 
     async def on_start() -> None:
@@ -2437,6 +2500,9 @@ def run_web_ui(
     back_btn.on_click(on_back_to_setup)
     export_json_btn.on_click(on_export_json)
     export_csv_btn.on_click(on_export_csv)
+    summary_export_json_btn.on_click(on_export_json)
+    summary_export_csv_btn.on_click(on_export_csv)
+    summary_back_btn.on_click(on_back_to_setup)
     if pinball_mode and simulate_ht:
         sim_multi_btn.on_click(lambda: trigger_pinball_event("multi", manual=True))
         sim_jackpot_btn.on_click(lambda: trigger_pinball_event("jackpot", manual=True))

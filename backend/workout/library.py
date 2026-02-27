@@ -49,6 +49,14 @@ TEMPLATES: tuple[WorkoutTemplate, ...] = (
         ),
     ),
     WorkoutTemplate(
+        key="home_trainer_tempo_12",
+        name="Home trainer tempo",
+        category="Tempo",
+        steps=(
+            WorkoutTemplateStep(720, 0.72, "Serie 12 min zone moderee", 85, 95),
+        ),
+    ),
+    WorkoutTemplate(
         key="sweetspot_45",
         name="Sweet Spot 45",
         category="FTP",
