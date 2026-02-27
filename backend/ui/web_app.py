@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+import os
 from pathlib import Path
 import time
 from typing import Any, cast
@@ -178,7 +179,11 @@ def run_web_ui(
     controller = UIController(debug_ftms=False, simulate_ht=simulate_ht)
     state = WebState()
     pinball_mode = ui_theme == "pinball"
-    csp_safe_mode = pinball_mode
+    csp_safe_mode = pinball_mode and os.getenv("VELOX_UI_CSP_SAFE", "").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
     ui.add_head_html(
         """
         <style>
@@ -425,6 +430,8 @@ def run_web_ui(
           .ve-fx.bonus { color: #22d3ee; }
           .ve-fx.multi { color: #a78bfa; }
           .ve-fx.jackpot { color: #facc15; }
+          .ve-fx.coach { color: #86efac; }
+          .ve-fx.phase { color: #fcd34d; }
           .ve-scene.fx-jackpot {
             box-shadow: inset 0 0 0 2px rgba(250,204,21,.45), 0 0 24px rgba(250,204,21,.38);
           }
@@ -512,6 +519,21 @@ def run_web_ui(
               scene.classList.remove('fx-bonus', 'fx-multi', 'fx-jackpot');
             }, 850);
             window.veloxPinballDotBurst(cssKind, cssKind === 'jackpot' ? 22 : 14);
+          };
+          window.veloxCoachCue = function(kind, label, durationMs) {
+            const scene = document.getElementById('ve-scene');
+            const fx = document.getElementById('ve-fx');
+            if (!scene || !fx) return;
+            const cssKind = (kind === 'phase') ? 'phase' : 'coach';
+            fx.classList.remove('bonus', 'multi', 'jackpot', 'coach', 'phase', 'show');
+            fx.classList.add(cssKind);
+            fx.textContent = label || (cssKind === 'phase' ? 'TRANSITION' : 'GOOD JOB');
+            void fx.offsetWidth;
+            fx.classList.add('show');
+            const duration = Math.max(700, Number(durationMs || 1200));
+            window.setTimeout(() => {
+              fx.classList.remove('show');
+            }, duration);
           };
           window.veloxPinballDotBurst = function(kind, count) {
             const scene = document.getElementById('ve-scene');
@@ -806,6 +828,8 @@ def run_web_ui(
     pinball_last_bonus = "READY"
     pinball_last_step_seen = 0
     pinball_last_jackpot_ts = 0.0
+    last_phase_notice_key: str | None = None
+    last_encourage_bucket: int | None = None
 
     timeline_labels: list[str] = []
     timeline_expected_power: list[int] = []
@@ -855,39 +879,29 @@ def run_web_ui(
             course_cards_grid = ui.grid().classes("w-full grid-cols-1 md:grid-cols-3 gap-3")
             course_info = ui.label("No course loaded").classes("text-sm text-slate-300")
 
-        plan_chart = None
-        if pinball_mode:
-            with ui.card().classes("w-full gb-card gb-compact"):
-                ui.label("Pinball mode active: CSP-safe display").classes(
-                    "text-sm gb-title-neutral"
-                )
-                ui.label(
-                    "Workout preview chart disabled in pinball mode to avoid CSP unsafe-eval."
-                ).classes("text-xs gb-muted")
-        else:
-            plan_chart = ui.echart(
-                {
-                    "title": {
-                        "text": "Difficulty curve (target watts)",
-                        "left": "center",
-                        "textStyle": {
-                            "color": "#ffffff",
-                            "fontWeight": "bold",
-                            "fontFamily": "Arial",
-                        },
+        plan_chart = ui.echart(
+            {
+                "title": {
+                    "text": "Difficulty curve (target watts)",
+                    "left": "center",
+                    "textStyle": {
+                        "color": "#ffffff",
+                        "fontWeight": "bold",
+                        "fontFamily": "Arial",
                     },
-                    "tooltip": {"trigger": "axis"},
-                    "xAxis": {"type": "category", "data": [], "axisLabel": {"color": "#ffffff"}},
-                    "yAxis": {
-                        "type": "value",
-                        "name": "W",
-                        "axisLabel": {"color": "#ffffff"},
-                        "nameTextStyle": {"color": "#ffffff", "fontWeight": "bold"},
-                    },
-                    "series": [{"type": "bar", "data": []}],
-                    "grid": {"left": 50, "right": 20, "top": 48, "bottom": 40},
-                }
-            ).classes("w-full h-72")
+                },
+                "tooltip": {"trigger": "axis"},
+                "xAxis": {"type": "category", "data": [], "axisLabel": {"color": "#ffffff"}},
+                "yAxis": {
+                    "type": "value",
+                    "name": "W",
+                    "axisLabel": {"color": "#ffffff"},
+                    "nameTextStyle": {"color": "#ffffff", "fontWeight": "bold"},
+                },
+                "series": [{"type": "bar", "data": []}],
+                "grid": {"left": 50, "right": 20, "top": 48, "bottom": 40},
+            }
+        ).classes("w-full h-72")
 
         with ui.row().classes("w-full items-center gap-2"):
             start_btn = ui.button("Start")
@@ -1021,9 +1035,88 @@ def run_web_ui(
                 """
             ).classes("w-full")
 
-        live_chart = None
-        with ui.card().classes("w-full gb-card gb-compact"):
-            ui.label("Live chart disabled (CSP-safe mode)").classes("text-sm gb-muted")
+        live_chart = ui.echart(
+            {
+                "title": {
+                    "text": "Live performance curve",
+                    "left": "center",
+                    "textStyle": {
+                        "color": "#ffffff",
+                        "fontWeight": "bold",
+                        "fontFamily": "Arial",
+                    },
+                },
+                "legend": {
+                    "data": [
+                        "Power expected",
+                        "Power actual",
+                        "Cadence expected",
+                        "Cadence actual",
+                    ],
+                    "top": 28,
+                    "textStyle": {"color": "#ffffff"},
+                },
+                "tooltip": {"trigger": "axis"},
+                "xAxis": {
+                    "type": "category",
+                    "data": [],
+                    "axisLabel": {"color": "#ffffff"},
+                    "boundaryGap": False,
+                },
+                "yAxis": [
+                    {
+                        "type": "value",
+                        "name": "W",
+                        "axisLabel": {"color": "#ffffff"},
+                        "nameTextStyle": {"color": "#ffffff", "fontWeight": "bold"},
+                    },
+                    {
+                        "type": "value",
+                        "name": "rpm",
+                        "axisLabel": {"color": "#ffffff"},
+                        "nameTextStyle": {"color": "#ffffff", "fontWeight": "bold"},
+                    },
+                ],
+                "series": [
+                    {
+                        "name": "Power expected",
+                        "type": "line",
+                        "data": [],
+                        "showSymbol": False,
+                        "lineStyle": {"type": "dashed", "width": 2},
+                        "itemStyle": {"color": "#6388ff"},
+                    },
+                    {
+                        "name": "Power actual",
+                        "type": "line",
+                        "data": [],
+                        "showSymbol": False,
+                        "lineStyle": {"width": 2},
+                        "itemStyle": {"color": "#7ddc74"},
+                    },
+                    {
+                        "name": "Cadence expected",
+                        "type": "line",
+                        "yAxisIndex": 1,
+                        "data": [],
+                        "showSymbol": False,
+                        "lineStyle": {"type": "dashed", "width": 2},
+                        "itemStyle": {"color": "#ffd15a"},
+                    },
+                    {
+                        "name": "Cadence actual",
+                        "type": "line",
+                        "yAxisIndex": 1,
+                        "data": [],
+                        "showSymbol": False,
+                        "lineStyle": {"width": 2},
+                        "itemStyle": {"color": "#ff7d7d"},
+                    },
+                ],
+                "grid": {"left": 50, "right": 50, "top": 72, "bottom": 40},
+                "animation": False,
+            }
+        ).classes("w-full h-72")
 
     workout_view.set_visibility(False)
 
@@ -1487,6 +1580,7 @@ def run_web_ui(
 
     def refresh_ui() -> None:
         nonlocal last_coaching_alert_key, sound_alerts
+        nonlocal last_phase_notice_key, last_encourage_bucket
         status_label.text = f"Status: {state.status}"
         kpi_power.text = _fmt_power(state.power)
         kpi_cadence.text = _fmt_cadence(state.cadence)
@@ -1570,6 +1664,8 @@ def run_web_ui(
             guidance_label.style("color: #cbd5e1; font-weight: 600;")
             coaching_stabilizer.reset()
             last_coaching_alert_key = None
+            last_phase_notice_key = None
+            last_encourage_bucket = None
         target_bits: list[str] = []
         if expected_power_min is not None and expected_power_max is not None:
             target_bits.append(f"Power {expected_power_min}-{expected_power_max}W")
@@ -1642,6 +1738,45 @@ def run_web_ui(
                     """
                 )
             last_coaching_alert_key = stable_signal.key
+
+            # Classic coaching cues near the rider:
+            # - encouragement pulses
+            # - phase transition countdown before next step
+            if not pinball_mode:
+                elapsed = int(state.progress.elapsed_total_sec)
+                encourage_bucket = elapsed // 12
+                if encourage_bucket != last_encourage_bucket:
+                    last_encourage_bucket = encourage_bucket
+                    if power_in_zone is True and cadence_in_zone is True:
+                        _safe_run_js(
+                            "window.veloxCoachCue("
+                            "'coach', 'Excellent, garde ce rythme!', 950);"
+                        )
+                    elif scene_action == "up":
+                        _safe_run_js("window.veloxCoachCue('coach', 'Allez, monte un peu!', 900);")
+                    elif scene_action == "down":
+                        _safe_run_js(
+                            "window.veloxCoachCue("
+                            "'coach', 'Souple, reduis legerement', 900);"
+                        )
+                    else:
+                        _safe_run_js("window.veloxCoachCue('coach', 'Stable, continue', 850);")
+
+                if state.workout and state.progress.step_index < state.progress.step_total:
+                    next_step = state.workout.steps[state.progress.step_index]
+                    sec_to_next = int(state.progress.remaining_sec)
+                    # Pre-alert window to prepare transition (Rouvy-like).
+                    if sec_to_next <= 12 and (sec_to_next % 2 == 0 or sec_to_next <= 3):
+                        notice_key = f"{state.progress.step_index}:{sec_to_next}"
+                        if notice_key != last_phase_notice_key:
+                            last_phase_notice_key = notice_key
+                            next_name = next_step.label or f"Step {state.progress.step_index + 1}"
+                            cue = f"Dans {sec_to_next}s: {next_name} ({next_step.target_watts}W)"
+                            _safe_run_js(
+                                f"window.veloxCoachCue('phase', {cue!r}, 1300);"
+                            )
+                else:
+                    last_phase_notice_key = None
         _safe_run_js(
             "window.veloxUpdateScene("
             f"{state.speed if state.speed is not None else 0},"
