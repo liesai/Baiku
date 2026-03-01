@@ -1,6 +1,17 @@
-# Baikou
+# velox-engine (Baikou)
 
-MVP terminal-only pour home-trainer FTMS BLE (focus Elite Direto XRT), structuré pour évoluer en projet open-source et orchestration OpenClaw.
+Plateforme d'entraînement home-trainer FTMS BLE (focus Elite Direto XRT) avec UI web NiceGUI, simulation avancée et base analytique de séance.
+
+## Version README
+- `Baikou UI stack - Mars 2026`
+- Ce document reflète l'état actuel du projet (CLI + UI web + simulation + presets + suivi de séance)
+
+## État actuel
+- Interface web responsive (NiceGUI) pour setup, connexion devices, lancement de séance et suivi live
+- Pipeline de séance: presets, chargement fichier (`.json`/`.csv`), timers, objectifs puissance/cadence
+- Mode simulation HT pour tester l'UI sans matériel BLE
+- Journalisation de session locale et base pour analyse post-entraînement
+- Pilotage FTMS en mode ERG + fallback/diagnostic côté connexion BLE
 
 ## MVP scope
 - Scan BLE
@@ -79,7 +90,7 @@ python -m backend.cli.main --erg 200
 
 ### Connect with longer startup wait before ERG (time to start pedaling)
 ```bash
-python -m backend.cli.main --connect EC:3A:81:4A:F9:3D --erg 200 --startup-wait 90
+python -m backend.cli.main --connect AA:BB:CC:DD:EE:FF --erg 200 --startup-wait 90
 ```
 
 ### Connect to specific trainer (address or exact name)
@@ -89,7 +100,7 @@ python -m backend.cli.main --connect AA:BB:CC:DD:EE:FF
 
 ### Connect with FTMS debug output (raw payload + flags)
 ```bash
-python -m backend.cli.main --connect EC:3A:81:4A:F9:3D --debug-ftms
+python -m backend.cli.main --connect AA:BB:CC:DD:EE:FF --debug-ftms
 ```
 
 ### Launch Linux UI (desktop app)
