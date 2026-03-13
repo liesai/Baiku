@@ -17,3 +17,10 @@ Neon night
 - Author: ansimuz
 
 These files are used for personal/opensource demo purposes inside Baikou.
+
+Cyclist composite rider
+- File: `backend/ui/assets/cyclist_sprite_cc0_composite.png`
+- Built for Baikou from a CC0 human walk cycle reference in:
+  https://opengameart.org/content/cc0-walk-cycles
+- License basis: CC0
+- Notes: The final cyclist spritesheet is a custom composite created locally for Baikou.

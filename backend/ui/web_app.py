@@ -47,7 +47,7 @@ ACTION_SWITCH_MIN_SEC = 2.0
 HT_CONNECT_TIMEOUT_SEC = 40.0
 ASSETS_ROUTE = "/velox-assets"
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
-SPRITE_URL = f"{ASSETS_ROUTE}/cyclist_sprite_aligned.png"
+SPRITE_URL = f"{ASSETS_ROUTE}/cyclist_sprite_cc0_composite.png"
 SCENE_BG_URL = f"{ASSETS_ROUTE}/forest_bg.png"
 SCENE_BG_ALT_1_URL = f"{ASSETS_ROUTE}/forest_bg_alt_1.jpg"
 SCENE_BG_ALT_2_URL = f"{ASSETS_ROUTE}/forest_bg_alt_2.jpg"
@@ -414,6 +414,10 @@ def run_web_ui(
             --ve-pedal-rot: 0deg;
             --ve-rider-bob: 0px;
             --ve-sprite-shift-x: 0px;
+            --ve-rider-tilt: -2deg;
+            --ve-rider-scale: 1;
+            --ve-rider-shadow-opacity: .26;
+            --ve-rider-shadow-blur: 10px;
             --ve-accent: rgba(56, 189, 248, 0.35);
             --ve-glow: rgba(34, 211, 238, 0.18);
             --ve-road-line: rgba(248, 250, 252, 0.9);
@@ -428,14 +432,24 @@ def run_web_ui(
           .ve-scene[data-intensity="low"] {
             --ve-scene-boost: .92;
             --ve-overlay-opacity: .58;
+            --ve-rider-tilt: -1deg;
+            --ve-rider-scale: .98;
+            --ve-rider-shadow-opacity: .18;
           }
           .ve-scene[data-intensity="mid"] {
             --ve-scene-boost: 1;
             --ve-overlay-opacity: .86;
+            --ve-rider-tilt: -2deg;
+            --ve-rider-scale: 1;
+            --ve-rider-shadow-opacity: .24;
           }
           .ve-scene[data-intensity="high"] {
             --ve-scene-boost: 1.12;
             --ve-overlay-opacity: 1;
+            --ve-rider-tilt: -5deg;
+            --ve-rider-scale: 1.04;
+            --ve-rider-shadow-opacity: .32;
+            --ve-rider-shadow-blur: 14px;
           }
           .ve-scene[data-theme="forest"] {
             background:
@@ -670,15 +684,44 @@ def run_web_ui(
           }
           .ve-rider {
             position: absolute;
-            left: 74px;
-            bottom: 28px;
-            width: 112px;
-            height: 74px;
-            transform: translateY(var(--ve-rider-bob));
+            left: 70px;
+            bottom: 22px;
+            width: 132px;
+            height: 88px;
+            transform:
+              translateY(var(--ve-rider-bob))
+              rotate(var(--ve-rider-tilt))
+              scale(var(--ve-rider-scale));
+            transform-origin: 42% 72%;
             z-index: 5;
           }
           .ve-scene[data-intensity="high"] .ve-rider {
             filter: drop-shadow(0 0 12px rgba(255,255,255,0.08));
+          }
+          .ve-scene[data-theme="alpine"] .ve-rider {
+            bottom: 24px;
+            left: 76px;
+          }
+          .ve-scene[data-theme="neon"] .ve-rider {
+            bottom: 20px;
+            left: 72px;
+          }
+          .ve-rider-shadow {
+            position: absolute;
+            left: -2px;
+            right: 4px;
+            bottom: -2px;
+            height: 18px;
+            border-radius: 999px;
+            background: radial-gradient(
+              ellipse at center,
+              rgba(2, 6, 23, var(--ve-rider-shadow-opacity)) 0%,
+              rgba(2, 6, 23, 0.12) 42%,
+              rgba(2, 6, 23, 0) 74%
+            );
+            filter: blur(var(--ve-rider-shadow-blur));
+            transform: scaleX(0.92);
+            z-index: 0;
           }
           .ve-sprite {
             position: absolute;
@@ -690,6 +733,37 @@ def run_web_ui(
             background-position: 0% 0;
             transform: translateX(var(--ve-sprite-shift-x));
             filter: drop-shadow(0 2px 2px rgba(2, 6, 23, 0.45));
+            z-index: 2;
+          }
+          .ve-rider-glow {
+            position: absolute;
+            inset: 8px 14px 6px 14px;
+            background: radial-gradient(
+              ellipse at 42% 46%,
+              rgba(255,255,255,0.12) 0%,
+              rgba(255,255,255,0.05) 26%,
+              rgba(255,255,255,0) 62%
+            );
+            opacity: calc((var(--ve-scene-boost) - 0.86) * 0.9);
+            mix-blend-mode: screen;
+            pointer-events: none;
+            z-index: 1;
+          }
+          .ve-rider-occlusion {
+            position: absolute;
+            left: 32px;
+            right: -8px;
+            bottom: 18px;
+            height: 18px;
+            background: linear-gradient(
+              180deg,
+              rgba(0,0,0,0) 0%,
+              rgba(15, 23, 42, 0.14) 38%,
+              rgba(15, 23, 42, 0.42) 100%
+            );
+            border-radius: 999px 999px 4px 4px;
+            z-index: 3;
+            opacity: .72;
           }
           .ve-hud {
             position: absolute;
@@ -1514,7 +1588,10 @@ def run_web_ui(
                     <span id="ve-scene-speed" class="ve-hud-speed">0,0 km/h</span>
                   </div>
                   <div class="ve-rider">
+                    <div class="ve-rider-shadow"></div>
+                    <div class="ve-rider-glow"></div>
                     <div id="ve-sprite" class="ve-sprite"></div>
+                    <div class="ve-rider-occlusion"></div>
                   </div>
                 </div>
                 """
