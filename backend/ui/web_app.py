@@ -486,16 +486,48 @@ def run_web_ui(
               linear-gradient(180deg, rgba(253,186,116,0.28) 0%, rgba(255,255,255,0.02) 46%);
           }
           .ve-scene[data-theme="alpine"] .ve-bg-far {
-            opacity: .32;
-            filter: saturate(.72) hue-rotate(-25deg) brightness(1.25);
+            top: 34px;
+            bottom: 42px;
+            background-image:
+              linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 60%),
+              linear-gradient(135deg, rgba(184, 208, 255, 0.75) 0%, rgba(124, 159, 214, 0.8) 100%);
+            background-size: 100% 100%, 240px 78px;
+            background-position: center, var(--ve-bg-far-offset) 100%;
+            background-repeat: no-repeat, repeat-x;
+            clip-path: polygon(0 100%, 10% 72%, 18% 84%, 30% 50%, 42% 82%, 56% 34%, 70% 86%, 84% 58%, 100% 100%);
+            opacity: .62;
+            filter: none;
           }
           .ve-scene[data-theme="alpine"] .ve-bg-mid {
-            opacity: .7;
-            filter: saturate(.74) hue-rotate(-28deg) brightness(1.16);
+            top: 64px;
+            bottom: 18px;
+            background-image:
+              linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 44%),
+              linear-gradient(135deg, rgba(70, 116, 164, 0.95) 0%, rgba(31, 64, 101, 0.98) 100%);
+            background-size: 100% 100%, 180px 66px;
+            background-position: center, var(--ve-bg-mid-offset) 100%;
+            background-repeat: no-repeat, repeat-x;
+            clip-path: polygon(0 100%, 0 82%, 10% 62%, 18% 78%, 30% 42%, 44% 88%, 59% 48%, 70% 74%, 82% 44%, 91% 67%, 100% 56%, 100% 100%);
+            opacity: .92;
+            filter: none;
           }
           .ve-scene[data-theme="alpine"] .ve-bg-front {
-            opacity: .18;
-            filter: saturate(.55) hue-rotate(-24deg) brightness(1.35);
+            top: auto;
+            bottom: 36px;
+            height: 28px;
+            background-image:
+              repeating-linear-gradient(
+                90deg,
+                rgba(12, 74, 110, 0.0) 0 12px,
+                rgba(15, 118, 110, 0.75) 12px 18px,
+                rgba(8, 47, 73, 0.92) 18px 42px
+              );
+            background-size: 360px 100%;
+            background-position: var(--ve-bg-front-offset) 0;
+            background-repeat: repeat-x;
+            opacity: .48;
+            filter: none;
+            mix-blend-mode: normal;
           }
           .ve-scene[data-theme="neon"] .ve-bg-sky {
             background:
@@ -504,17 +536,62 @@ def run_web_ui(
               linear-gradient(180deg, rgba(15,23,42,0.22) 0%, rgba(255,255,255,0) 46%);
           }
           .ve-scene[data-theme="neon"] .ve-bg-far {
-            opacity: .2;
-            filter: saturate(.6) hue-rotate(120deg) brightness(.7);
+            top: 42px;
+            bottom: 48px;
+            background-image:
+              repeating-linear-gradient(
+                90deg,
+                rgba(0,0,0,0) 0 28px,
+                rgba(129, 140, 248, 0.12) 28px 34px,
+                rgba(0,0,0,0) 34px 72px
+              ),
+              linear-gradient(
+                180deg,
+                rgba(34, 211, 238, 0.0) 0%,
+                rgba(34, 211, 238, 0.06) 58%,
+                rgba(34, 211, 238, 0.15) 100%
+              );
+            background-size: 220px 100%, 100% 100%;
+            background-position: var(--ve-bg-far-offset) 0, center;
+            background-repeat: repeat-x, no-repeat;
+            opacity: .9;
+            filter: none;
           }
           .ve-scene[data-theme="neon"] .ve-bg-mid {
-            opacity: .26;
-            filter: saturate(1.25) hue-rotate(135deg) brightness(.6);
+            top: 58px;
+            bottom: 30px;
+            background-image:
+              repeating-linear-gradient(
+                90deg,
+                rgba(0,0,0,0) 0 18px,
+                rgba(244, 114, 182, 0.35) 18px 22px,
+                rgba(0,0,0,0) 22px 48px
+              ),
+              linear-gradient(180deg, rgba(8, 47, 73, 0.0) 0%, rgba(14, 165, 233, 0.12) 100%);
+            background-size: 160px 100%, 100% 100%;
+            background-position: var(--ve-bg-mid-offset) 0, center;
+            background-repeat: repeat-x, no-repeat;
+            clip-path: polygon(0 100%, 0 76%, 8% 76%, 8% 56%, 18% 56%, 18% 68%, 28% 68%, 28% 44%, 38% 44%, 38% 74%, 52% 74%, 52% 48%, 66% 48%, 66% 60%, 80% 60%, 80% 38%, 92% 38%, 92% 72%, 100% 72%, 100% 100%);
+            opacity: .92;
+            filter: none;
           }
           .ve-scene[data-theme="neon"] .ve-bg-front {
-            opacity: .15;
-            filter: saturate(1.65) hue-rotate(115deg) brightness(.72);
-            mix-blend-mode: lighten;
+            top: auto;
+            bottom: 28px;
+            height: 44px;
+            background-image:
+              repeating-linear-gradient(
+                90deg,
+                rgba(45, 212, 191, 0.0) 0 36px,
+                rgba(45, 212, 191, 0.9) 36px 42px,
+                rgba(0,0,0,0) 42px 96px
+              );
+            background-size: 220px 100%;
+            background-position: var(--ve-bg-front-offset) 0;
+            background-repeat: repeat-x;
+            opacity: .34;
+            filter: none;
+            mix-blend-mode: screen;
           }
           .ve-road {
             position: absolute;
