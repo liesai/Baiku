@@ -47,7 +47,7 @@ ACTION_SWITCH_MIN_SEC = 2.0
 HT_CONNECT_TIMEOUT_SEC = 40.0
 ASSETS_ROUTE = "/velox-assets"
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
-SPRITE_URL = f"{ASSETS_ROUTE}/cyclist_sprite_cc0_composite.png"
+SPRITE_URL = f"{ASSETS_ROUTE}/cyclist_sprite_aligned.png"
 SCENE_BG_URL = f"{ASSETS_ROUTE}/forest_bg.png"
 SCENE_BG_ALT_1_URL = f"{ASSETS_ROUTE}/forest_bg_alt_1.jpg"
 SCENE_BG_ALT_2_URL = f"{ASSETS_ROUTE}/forest_bg_alt_2.jpg"
@@ -418,6 +418,9 @@ def run_web_ui(
             --ve-rider-scale: 1;
             --ve-rider-shadow-opacity: .26;
             --ve-rider-shadow-blur: 10px;
+            --ve-rider-pulse: 0;
+            --ve-rider-dust-opacity: .18;
+            --ve-rider-speed-opacity: .08;
             --ve-accent: rgba(56, 189, 248, 0.35);
             --ve-glow: rgba(34, 211, 238, 0.18);
             --ve-road-line: rgba(248, 250, 252, 0.9);
@@ -435,6 +438,8 @@ def run_web_ui(
             --ve-rider-tilt: -1deg;
             --ve-rider-scale: .98;
             --ve-rider-shadow-opacity: .18;
+            --ve-rider-dust-opacity: .08;
+            --ve-rider-speed-opacity: .04;
           }
           .ve-scene[data-intensity="mid"] {
             --ve-scene-boost: 1;
@@ -442,6 +447,8 @@ def run_web_ui(
             --ve-rider-tilt: -2deg;
             --ve-rider-scale: 1;
             --ve-rider-shadow-opacity: .24;
+            --ve-rider-dust-opacity: .16;
+            --ve-rider-speed-opacity: .1;
           }
           .ve-scene[data-intensity="high"] {
             --ve-scene-boost: 1.12;
@@ -450,6 +457,8 @@ def run_web_ui(
             --ve-rider-scale: 1.04;
             --ve-rider-shadow-opacity: .32;
             --ve-rider-shadow-blur: 14px;
+            --ve-rider-dust-opacity: .28;
+            --ve-rider-speed-opacity: .22;
           }
           .ve-scene[data-theme="forest"] {
             background:
@@ -731,7 +740,9 @@ def run_web_ui(
             background-repeat: no-repeat;
             background-size: 300% 100%;
             background-position: 0% 0;
-            transform: translateX(var(--ve-sprite-shift-x));
+            transform:
+              translateX(var(--ve-sprite-shift-x))
+              translateY(calc(var(--ve-rider-pulse) * -1px));
             filter: drop-shadow(0 2px 2px rgba(2, 6, 23, 0.45));
             z-index: 2;
           }
@@ -747,6 +758,39 @@ def run_web_ui(
             opacity: calc((var(--ve-scene-boost) - 0.86) * 0.9);
             mix-blend-mode: screen;
             pointer-events: none;
+            z-index: 1;
+          }
+          .ve-rider-speedlines {
+            position: absolute;
+            left: -34px;
+            top: 20px;
+            width: 68px;
+            height: 28px;
+            opacity: var(--ve-rider-speed-opacity);
+            background:
+              repeating-linear-gradient(
+                180deg,
+                rgba(255,255,255,0) 0 4px,
+                rgba(255,255,255,0.8) 4px 6px,
+                rgba(255,255,255,0) 6px 12px
+              );
+            filter: blur(1px);
+            transform: skewX(-24deg);
+            z-index: 1;
+          }
+          .ve-rider-dust {
+            position: absolute;
+            left: 12px;
+            bottom: 8px;
+            width: 96px;
+            height: 22px;
+            opacity: var(--ve-rider-dust-opacity);
+            background:
+              radial-gradient(circle at 18% 68%, rgba(226,232,240,0.85) 0 10%, rgba(226,232,240,0) 24%),
+              radial-gradient(circle at 44% 54%, rgba(226,232,240,0.72) 0 8%, rgba(226,232,240,0) 22%),
+              radial-gradient(circle at 72% 70%, rgba(226,232,240,0.55) 0 9%, rgba(226,232,240,0) 24%);
+            filter: blur(1.5px);
+            transform: translateX(calc(var(--ve-rider-pulse) * -1px));
             z-index: 1;
           }
           .ve-rider-occlusion {
@@ -850,6 +894,7 @@ def run_web_ui(
               pedal: 0,
               bobTick: 0,
               frameTick: 0,
+              pulseTick: 0,
             };
             const s = Math.max(0, Number(speed || 0));
             const c = Math.max(0, Number(cadence || 0));
@@ -861,13 +906,16 @@ def run_web_ui(
             state.pedal = (state.pedal + (c * 0.92)) % 360;
             state.bobTick += 0.35;
             state.frameTick += Math.max(0.25, c / 65);
+            state.pulseTick += Math.max(0.18, c / 95);
             const bob = Math.sin(state.bobTick + c / 20) * Math.min(2.5, 0.6 + c / 65);
+            const pulse = Math.sin(state.pulseTick) * Math.min(1.6, 0.3 + c / 120);
             scene.style.setProperty('--ve-bg-far-offset', `${state.far}px`);
             scene.style.setProperty('--ve-bg-mid-offset', `${state.mid}px`);
             scene.style.setProperty('--ve-bg-front-offset', `${state.front}px`);
             scene.style.setProperty('--ve-road-offset', `${state.road}px`);
             scene.style.setProperty('--ve-pedal-rot', `${state.pedal}deg`);
             scene.style.setProperty('--ve-rider-bob', `${bob}px`);
+            scene.style.setProperty('--ve-rider-pulse', `${pulse.toFixed(2)}`);
             scene.dataset.zone = inZone ? 'ok' : 'bad';
             scene.dataset.action = action || 'steady';
             const intensityScore = Math.max(s / 28, c / 95, p / 240) +
@@ -877,11 +925,13 @@ def run_web_ui(
             else if (intensityScore < 0.5) intensity = 'low';
             scene.dataset.intensity = intensity;
             if (spriteNode) {
-              const frame = Math.floor(state.frameTick) % 3;
+              const framePhase = Math.floor(state.frameTick) % 4;
+              const frameMap = [0, 1, 2, 1];
+              const frame = frameMap[framePhase];
               const x = frame * 50;
-              const shiftByFrame = [0, 0, 0];
+              const shiftByFrame = [0, -1, 0, 1];
               spriteNode.style.backgroundPosition = `${x}% 0%`;
-              scene.style.setProperty('--ve-sprite-shift-x', `${shiftByFrame[frame]}px`);
+              scene.style.setProperty('--ve-sprite-shift-x', `${shiftByFrame[framePhase]}px`);
             }
             if (speedNode) speedNode.textContent = `${s.toFixed(1)} km/h`;
             if (actionNode) {
@@ -1589,6 +1639,8 @@ def run_web_ui(
                   </div>
                   <div class="ve-rider">
                     <div class="ve-rider-shadow"></div>
+                    <div class="ve-rider-speedlines"></div>
+                    <div class="ve-rider-dust"></div>
                     <div class="ve-rider-glow"></div>
                     <div id="ve-sprite" class="ve-sprite"></div>
                     <div class="ve-rider-occlusion"></div>
