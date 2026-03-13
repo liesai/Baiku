@@ -503,7 +503,7 @@ def run_web_ui(
           .ve-bg-far {
             bottom: 24px;
             background-image: url('__FOREST_PARALLAX_BACK_URL__');
-            background-size: auto 112%;
+            background-size: auto 148%;
             background-position: var(--ve-bg-far-offset) center;
             opacity: .52;
             filter: saturate(1.04) blur(.15px);
@@ -511,29 +511,43 @@ def run_web_ui(
           .ve-bg-mid {
             bottom: 8px;
             background-image: url('__FOREST_PARALLAX_MID_URL__');
-            background-size: auto 116%;
+            background-size: auto 156%;
             background-position: var(--ve-bg-mid-offset) center;
             opacity: .92;
             filter: saturate(1.08) contrast(1.04);
           }
           .ve-bg-front {
             top: auto;
-            bottom: 26px;
-            height: 80px;
+            bottom: 24px;
+            height: 96px;
             background-image: url('__FOREST_PARALLAX_FRONT_URL__');
-            background-size: auto 108%;
+            background-size: auto 162%;
             background-position: var(--ve-bg-front-offset) bottom;
             opacity: .82;
             filter: saturate(1.12) contrast(1.06);
             mix-blend-mode: normal;
+            overflow: hidden;
+          }
+          .ve-bg-front::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background-image: url('__FOREST_PARALLAX_FRONT_URL__');
+            background-repeat: repeat-x;
+            background-size: auto 138%;
+            background-position: calc(var(--ve-bg-front-offset) * -0.68) bottom;
+            opacity: .34;
+            transform: scaleX(-1) translateX(10%);
+            transform-origin: center;
+            filter: saturate(1.02) brightness(.94);
           }
           .ve-bg-overlay {
             background:
               url('__FOREST_PARALLAX_OVERLAY_URL__'),
               radial-gradient(circle at 50% 35%, var(--ve-glow) 0%, rgba(2,6,23,0) 42%);
             background-repeat: repeat-x, no-repeat;
-            background-size: auto 100%, 100% 100%;
-            background-position: var(--ve-bg-front-offset) center, center;
+            background-size: auto 134%, 100% 100%;
+            background-position: calc(var(--ve-bg-front-offset) * 0.78) bottom, center;
             opacity: var(--ve-overlay-opacity);
           }
           .ve-scene[data-theme="alpine"] .ve-bg-sky {
@@ -548,7 +562,7 @@ def run_web_ui(
             top: 14px;
             bottom: 32px;
             background-image: url('__ALPINE_PARALLAX_CLOUDS_URL__');
-            background-size: auto 100%;
+            background-size: auto 134%;
             background-position: var(--ve-bg-far-offset) center;
             background-repeat: repeat-x;
             opacity: calc(.52 * var(--ve-scene-boost));
@@ -558,7 +572,7 @@ def run_web_ui(
             top: 28px;
             bottom: 14px;
             background-image: url('__ALPINE_PARALLAX_FAR_URL__');
-            background-size: auto 108%;
+            background-size: auto 146%;
             background-position: var(--ve-bg-mid-offset) bottom;
             background-repeat: repeat-x;
             opacity: .84;
@@ -569,7 +583,7 @@ def run_web_ui(
             bottom: 18px;
             height: 112px;
             background-image: url('__ALPINE_PARALLAX_MID_URL__');
-            background-size: auto 100%;
+            background-size: auto 148%;
             background-position: var(--ve-bg-front-offset) bottom;
             background-repeat: repeat-x;
             opacity: calc(.9 * var(--ve-scene-boost));
@@ -594,7 +608,7 @@ def run_web_ui(
             top: 18px;
             bottom: 18px;
             background-image: url('__NEON_PARALLAX_CLOUDS_URL__');
-            background-size: auto 100%;
+            background-size: auto 128%;
             background-position: var(--ve-bg-far-offset) center;
             background-repeat: repeat-x;
             opacity: calc(.32 * var(--ve-scene-boost));
@@ -604,7 +618,7 @@ def run_web_ui(
             top: 24px;
             bottom: 14px;
             background-image: url('__NEON_PARALLAX_BACK_URL__');
-            background-size: auto 106%;
+            background-size: auto 138%;
             background-position: var(--ve-bg-mid-offset) bottom;
             background-repeat: repeat-x;
             opacity: .84;
@@ -617,7 +631,7 @@ def run_web_ui(
             background-image:
               url('__NEON_PARALLAX_FRONT_URL__'),
               url('__NEON_PARALLAX_MID_URL__');
-            background-size: auto 100%, auto 100%;
+            background-size: auto 136%, auto 124%;
             background-position: var(--ve-bg-front-offset) bottom, calc(var(--ve-bg-front-offset) * 0.72) bottom;
             background-repeat: repeat-x, repeat-x;
             opacity: calc(.82 * var(--ve-scene-boost));
