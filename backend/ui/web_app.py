@@ -51,6 +51,19 @@ SPRITE_URL = f"{ASSETS_ROUTE}/cyclist_sprite_aligned.png"
 SCENE_BG_URL = f"{ASSETS_ROUTE}/forest_bg.png"
 SCENE_BG_ALT_1_URL = f"{ASSETS_ROUTE}/forest_bg_alt_1.jpg"
 SCENE_BG_ALT_2_URL = f"{ASSETS_ROUTE}/forest_bg_alt_2.jpg"
+FOREST_PARALLAX_BACK_URL = f"{ASSETS_ROUTE}/parallax/forest/back.png"
+FOREST_PARALLAX_MID_URL = f"{ASSETS_ROUTE}/parallax/forest/mid.png"
+FOREST_PARALLAX_FRONT_URL = f"{ASSETS_ROUTE}/parallax/forest/front.png"
+FOREST_PARALLAX_OVERLAY_URL = f"{ASSETS_ROUTE}/parallax/forest/overlay.png"
+ALPINE_PARALLAX_SKY_URL = f"{ASSETS_ROUTE}/parallax/alpine/sky.png"
+ALPINE_PARALLAX_FAR_URL = f"{ASSETS_ROUTE}/parallax/alpine/far.png"
+ALPINE_PARALLAX_MID_URL = f"{ASSETS_ROUTE}/parallax/alpine/mid.png"
+ALPINE_PARALLAX_CLOUDS_URL = f"{ASSETS_ROUTE}/parallax/alpine/clouds.png"
+NEON_PARALLAX_STARS_URL = f"{ASSETS_ROUTE}/parallax/neon/stars.png"
+NEON_PARALLAX_BACK_URL = f"{ASSETS_ROUTE}/parallax/neon/back.png"
+NEON_PARALLAX_MID_URL = f"{ASSETS_ROUTE}/parallax/neon/mid.png"
+NEON_PARALLAX_FRONT_URL = f"{ASSETS_ROUTE}/parallax/neon/front.png"
+NEON_PARALLAX_CLOUDS_URL = f"{ASSETS_ROUTE}/parallax/neon/clouds.png"
 DMD_CYCLIST_URL = f"{ASSETS_ROUTE}/dmd_cyclist_bonus.png"
 _ASSETS_MOUNTED = False
 
@@ -404,12 +417,26 @@ def run_web_ui(
             --ve-accent: rgba(56, 189, 248, 0.35);
             --ve-glow: rgba(34, 211, 238, 0.18);
             --ve-road-line: rgba(248, 250, 252, 0.9);
+            --ve-scene-boost: 1;
+            --ve-overlay-opacity: .9;
           }
           .ve-scene[data-zone="ok"] { box-shadow: inset 0 0 0 2px rgba(34,197,94,.25); }
           .ve-scene[data-zone="bad"] { box-shadow: inset 0 0 0 2px rgba(239,68,68,.25); }
           .ve-scene[data-action="up"] .ve-hud-action { color: #f59e0b; }
           .ve-scene[data-action="down"] .ve-hud-action { color: #ef4444; }
           .ve-scene[data-action="steady"] .ve-hud-action { color: #22c55e; }
+          .ve-scene[data-intensity="low"] {
+            --ve-scene-boost: .92;
+            --ve-overlay-opacity: .58;
+          }
+          .ve-scene[data-intensity="mid"] {
+            --ve-scene-boost: 1;
+            --ve-overlay-opacity: .86;
+          }
+          .ve-scene[data-intensity="high"] {
+            --ve-scene-boost: 1.12;
+            --ve-overlay-opacity: 1;
+          }
           .ve-scene[data-theme="forest"] {
             background:
               linear-gradient(180deg, rgba(15, 90, 88, 0.18) 0%, rgba(8, 23, 32, 0) 45%),
@@ -452,146 +479,133 @@ def run_web_ui(
           }
           .ve-bg-far {
             bottom: 24px;
-            background-image: url('__SCENE_BG_ALT_1_URL__');
-            background-size: auto 108%;
+            background-image: url('__FOREST_PARALLAX_BACK_URL__');
+            background-size: auto 112%;
             background-position: var(--ve-bg-far-offset) center;
-            opacity: .28;
-            filter: saturate(0.9) blur(.4px);
+            opacity: .52;
+            filter: saturate(1.04) blur(.15px);
           }
           .ve-bg-mid {
             bottom: 8px;
-            background-image: url('__SCENE_BG_URL__');
-            background-size: auto 118%;
+            background-image: url('__FOREST_PARALLAX_MID_URL__');
+            background-size: auto 116%;
             background-position: var(--ve-bg-mid-offset) center;
-            opacity: .84;
+            opacity: .92;
             filter: saturate(1.08) contrast(1.04);
           }
           .ve-bg-front {
-            top: 18px;
-            background-image: url('__SCENE_BG_ALT_2_URL__');
-            background-size: auto 128%;
-            background-position: var(--ve-bg-front-offset) center;
-            opacity: .28;
+            top: auto;
+            bottom: 26px;
+            height: 80px;
+            background-image: url('__FOREST_PARALLAX_FRONT_URL__');
+            background-size: auto 108%;
+            background-position: var(--ve-bg-front-offset) bottom;
+            opacity: .82;
             filter: saturate(1.12) contrast(1.06);
-            mix-blend-mode: screen;
+            mix-blend-mode: normal;
           }
           .ve-bg-overlay {
-            background: radial-gradient(circle at 50% 35%, var(--ve-glow) 0%, rgba(2,6,23,0) 42%);
-            opacity: .9;
+            background:
+              url('__FOREST_PARALLAX_OVERLAY_URL__'),
+              radial-gradient(circle at 50% 35%, var(--ve-glow) 0%, rgba(2,6,23,0) 42%);
+            background-repeat: repeat-x, no-repeat;
+            background-size: auto 100%, 100% 100%;
+            background-position: var(--ve-bg-front-offset) center, center;
+            opacity: var(--ve-overlay-opacity);
           }
           .ve-scene[data-theme="alpine"] .ve-bg-sky {
             background:
-              radial-gradient(circle at 18% 24%, rgba(255,255,255,0.36) 0 7%, rgba(255,255,255,0) 8%),
-              radial-gradient(circle at 68% 20%, rgba(255,255,255,0.28) 0 8%, rgba(255,255,255,0) 9%),
+              url('__ALPINE_PARALLAX_SKY_URL__'),
               linear-gradient(180deg, rgba(253,186,116,0.28) 0%, rgba(255,255,255,0.02) 46%);
+            background-repeat: repeat-x, no-repeat;
+            background-size: auto 100%, 100% 100%;
+            background-position: center, center;
           }
           .ve-scene[data-theme="alpine"] .ve-bg-far {
-            top: 34px;
-            bottom: 42px;
-            background-image:
-              linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 60%),
-              linear-gradient(135deg, rgba(184, 208, 255, 0.75) 0%, rgba(124, 159, 214, 0.8) 100%);
-            background-size: 100% 100%, 240px 78px;
-            background-position: center, var(--ve-bg-far-offset) 100%;
-            background-repeat: no-repeat, repeat-x;
-            clip-path: polygon(0 100%, 10% 72%, 18% 84%, 30% 50%, 42% 82%, 56% 34%, 70% 86%, 84% 58%, 100% 100%);
-            opacity: .62;
+            top: 14px;
+            bottom: 32px;
+            background-image: url('__ALPINE_PARALLAX_CLOUDS_URL__');
+            background-size: auto 100%;
+            background-position: var(--ve-bg-far-offset) center;
+            background-repeat: repeat-x;
+            opacity: calc(.52 * var(--ve-scene-boost));
             filter: none;
           }
           .ve-scene[data-theme="alpine"] .ve-bg-mid {
-            top: 64px;
-            bottom: 18px;
-            background-image:
-              linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 44%),
-              linear-gradient(135deg, rgba(70, 116, 164, 0.95) 0%, rgba(31, 64, 101, 0.98) 100%);
-            background-size: 100% 100%, 180px 66px;
-            background-position: center, var(--ve-bg-mid-offset) 100%;
-            background-repeat: no-repeat, repeat-x;
-            clip-path: polygon(0 100%, 0 82%, 10% 62%, 18% 78%, 30% 42%, 44% 88%, 59% 48%, 70% 74%, 82% 44%, 91% 67%, 100% 56%, 100% 100%);
-            opacity: .92;
-            filter: none;
+            top: 28px;
+            bottom: 14px;
+            background-image: url('__ALPINE_PARALLAX_FAR_URL__');
+            background-size: auto 108%;
+            background-position: var(--ve-bg-mid-offset) bottom;
+            background-repeat: repeat-x;
+            opacity: .84;
+            filter: saturate(calc(1.02 * var(--ve-scene-boost)));
           }
           .ve-scene[data-theme="alpine"] .ve-bg-front {
             top: auto;
-            bottom: 36px;
-            height: 28px;
-            background-image:
-              repeating-linear-gradient(
-                90deg,
-                rgba(12, 74, 110, 0.0) 0 12px,
-                rgba(15, 118, 110, 0.75) 12px 18px,
-                rgba(8, 47, 73, 0.92) 18px 42px
-              );
-            background-size: 360px 100%;
-            background-position: var(--ve-bg-front-offset) 0;
+            bottom: 18px;
+            height: 112px;
+            background-image: url('__ALPINE_PARALLAX_MID_URL__');
+            background-size: auto 100%;
+            background-position: var(--ve-bg-front-offset) bottom;
             background-repeat: repeat-x;
-            opacity: .48;
-            filter: none;
+            opacity: calc(.9 * var(--ve-scene-boost));
+            filter: saturate(1.08);
             mix-blend-mode: normal;
+          }
+          .ve-scene[data-theme="alpine"] .ve-bg-overlay {
+            background:
+              radial-gradient(circle at 48% 28%, rgba(255,244,214,0.16) 0%, rgba(255,244,214,0) 32%),
+              linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(2,6,23,0) 56%);
+            opacity: var(--ve-overlay-opacity);
           }
           .ve-scene[data-theme="neon"] .ve-bg-sky {
             background:
-              radial-gradient(circle at 22% 18%, rgba(244,114,182,0.28) 0 5%, rgba(244,114,182,0) 8%),
-              radial-gradient(circle at 80% 14%, rgba(45,212,191,0.24) 0 4%, rgba(45,212,191,0) 7%),
+              url('__NEON_PARALLAX_STARS_URL__'),
               linear-gradient(180deg, rgba(15,23,42,0.22) 0%, rgba(255,255,255,0) 46%);
+            background-repeat: repeat-x, no-repeat;
+            background-size: auto 100%, 100% 100%;
+            background-position: center, center;
           }
           .ve-scene[data-theme="neon"] .ve-bg-far {
-            top: 42px;
-            bottom: 48px;
-            background-image:
-              repeating-linear-gradient(
-                90deg,
-                rgba(0,0,0,0) 0 28px,
-                rgba(129, 140, 248, 0.12) 28px 34px,
-                rgba(0,0,0,0) 34px 72px
-              ),
-              linear-gradient(
-                180deg,
-                rgba(34, 211, 238, 0.0) 0%,
-                rgba(34, 211, 238, 0.06) 58%,
-                rgba(34, 211, 238, 0.15) 100%
-              );
-            background-size: 220px 100%, 100% 100%;
-            background-position: var(--ve-bg-far-offset) 0, center;
-            background-repeat: repeat-x, no-repeat;
-            opacity: .9;
-            filter: none;
+            top: 18px;
+            bottom: 18px;
+            background-image: url('__NEON_PARALLAX_CLOUDS_URL__');
+            background-size: auto 100%;
+            background-position: var(--ve-bg-far-offset) center;
+            background-repeat: repeat-x;
+            opacity: calc(.32 * var(--ve-scene-boost));
+            filter: hue-rotate(25deg) saturate(1.3);
           }
           .ve-scene[data-theme="neon"] .ve-bg-mid {
-            top: 58px;
-            bottom: 30px;
-            background-image:
-              repeating-linear-gradient(
-                90deg,
-                rgba(0,0,0,0) 0 18px,
-                rgba(244, 114, 182, 0.35) 18px 22px,
-                rgba(0,0,0,0) 22px 48px
-              ),
-              linear-gradient(180deg, rgba(8, 47, 73, 0.0) 0%, rgba(14, 165, 233, 0.12) 100%);
-            background-size: 160px 100%, 100% 100%;
-            background-position: var(--ve-bg-mid-offset) 0, center;
-            background-repeat: repeat-x, no-repeat;
-            clip-path: polygon(0 100%, 0 76%, 8% 76%, 8% 56%, 18% 56%, 18% 68%, 28% 68%, 28% 44%, 38% 44%, 38% 74%, 52% 74%, 52% 48%, 66% 48%, 66% 60%, 80% 60%, 80% 38%, 92% 38%, 92% 72%, 100% 72%, 100% 100%);
-            opacity: .92;
-            filter: none;
+            top: 24px;
+            bottom: 14px;
+            background-image: url('__NEON_PARALLAX_BACK_URL__');
+            background-size: auto 106%;
+            background-position: var(--ve-bg-mid-offset) bottom;
+            background-repeat: repeat-x;
+            opacity: .84;
+            filter: hue-rotate(18deg) saturate(calc(1.18 * var(--ve-scene-boost)));
           }
           .ve-scene[data-theme="neon"] .ve-bg-front {
             top: auto;
-            bottom: 28px;
-            height: 44px;
+            bottom: 16px;
+            height: 120px;
             background-image:
-              repeating-linear-gradient(
-                90deg,
-                rgba(45, 212, 191, 0.0) 0 36px,
-                rgba(45, 212, 191, 0.9) 36px 42px,
-                rgba(0,0,0,0) 42px 96px
-              );
-            background-size: 220px 100%;
-            background-position: var(--ve-bg-front-offset) 0;
-            background-repeat: repeat-x;
-            opacity: .34;
-            filter: none;
+              url('__NEON_PARALLAX_FRONT_URL__'),
+              url('__NEON_PARALLAX_MID_URL__');
+            background-size: auto 100%, auto 100%;
+            background-position: var(--ve-bg-front-offset) bottom, calc(var(--ve-bg-front-offset) * 0.72) bottom;
+            background-repeat: repeat-x, repeat-x;
+            opacity: calc(.82 * var(--ve-scene-boost));
+            filter: saturate(1.26);
             mix-blend-mode: screen;
+          }
+          .ve-scene[data-theme="neon"] .ve-bg-overlay {
+            background:
+              linear-gradient(180deg, rgba(244,114,182,0.04) 0%, rgba(34,211,238,0) 48%),
+              radial-gradient(circle at 52% 30%, rgba(34,211,238,0.18) 0%, rgba(34,211,238,0) 34%);
+            opacity: var(--ve-overlay-opacity);
           }
           .ve-road {
             position: absolute;
@@ -619,11 +633,28 @@ def run_web_ui(
             background-position-x: var(--ve-road-offset);
             opacity: .55;
           }
+          .ve-scene[data-intensity="high"] .ve-road::before {
+            opacity: .9;
+            filter: drop-shadow(0 0 8px var(--ve-road-line));
+          }
+          .ve-scene[data-intensity="low"] .ve-road::before {
+            opacity: .38;
+          }
           .ve-road::after {
             content: "";
             position: absolute;
             inset: 0;
             background: linear-gradient(180deg, rgba(15,23,42,0) 0%, rgba(15,23,42,0.64) 100%);
+          }
+          .ve-scene[data-theme="neon"] .ve-road {
+            background:
+              linear-gradient(180deg, rgba(45,212,191,0.08) 0%, rgba(15,23,42,0) 20%),
+              linear-gradient(180deg, rgba(2,6,23,0.1) 0%, rgba(2,6,23,0.85) 100%);
+          }
+          .ve-scene[data-theme="alpine"] .ve-road {
+            background:
+              linear-gradient(180deg, rgba(255,244,214,0.14) 0%, rgba(15,23,42,0) 20%),
+              linear-gradient(180deg, rgba(30,41,59,0.1) 0%, rgba(30,41,59,0.82) 100%);
           }
           .ve-scenery-badge {
             font-size: 0.68rem;
@@ -645,6 +676,9 @@ def run_web_ui(
             height: 74px;
             transform: translateY(var(--ve-rider-bob));
             z-index: 5;
+          }
+          .ve-scene[data-intensity="high"] .ve-rider {
+            filter: drop-shadow(0 0 12px rgba(255,255,255,0.08));
           }
           .ve-sprite {
             position: absolute;
@@ -728,7 +762,7 @@ def run_web_ui(
           .ve-dot.jackpot { color: #facc15; background: #facc15; }
         </style>
         <script>
-          window.veloxUpdateScene = function(speed, cadence, inZone, action) {
+          window.veloxUpdateScene = function(speed, cadence, power, inZone, action) {
             const scene = document.getElementById('ve-scene');
             if (!scene) return;
             const speedNode = document.getElementById('ve-scene-speed');
@@ -745,6 +779,7 @@ def run_web_ui(
             };
             const s = Math.max(0, Number(speed || 0));
             const c = Math.max(0, Number(cadence || 0));
+            const p = Math.max(0, Number(power || 0));
             state.far = (state.far - Math.max(0.08, s * 0.06)) % 1400;
             state.mid = (state.mid - Math.max(0.15, s * 0.16)) % 1400;
             state.front = (state.front - Math.max(0.25, s * 0.34)) % 1400;
@@ -761,6 +796,12 @@ def run_web_ui(
             scene.style.setProperty('--ve-rider-bob', `${bob}px`);
             scene.dataset.zone = inZone ? 'ok' : 'bad';
             scene.dataset.action = action || 'steady';
+            const intensityScore = Math.max(s / 28, c / 95, p / 240) +
+              (action === 'up' ? 0.32 : action === 'down' ? -0.18 : 0);
+            let intensity = 'mid';
+            if (intensityScore >= 1.0) intensity = 'high';
+            else if (intensityScore < 0.5) intensity = 'low';
+            scene.dataset.intensity = intensity;
             if (spriteNode) {
               const frame = Math.floor(state.frameTick) % 3;
               const x = frame * 50;
@@ -1012,7 +1053,7 @@ def run_web_ui(
               } else if (/Action:\\s*-/i.test(guidance)) {
                 inZone = false;
               }
-              window.veloxUpdateScene(speed, cadence, inZone, action);
+              window.veloxUpdateScene(speed, cadence, parseVal('ve-kpi-power'), inZone, action);
               if (window.veloxMiniGraph) {
                 window.veloxMiniGraph.push(parseVal('ve-kpi-power'), cadence);
               }
@@ -1100,6 +1141,19 @@ def run_web_ui(
         .replace("__SCENE_BG_URL__", SCENE_BG_URL)
         .replace("__SCENE_BG_ALT_1_URL__", SCENE_BG_ALT_1_URL)
         .replace("__SCENE_BG_ALT_2_URL__", SCENE_BG_ALT_2_URL)
+        .replace("__FOREST_PARALLAX_BACK_URL__", FOREST_PARALLAX_BACK_URL)
+        .replace("__FOREST_PARALLAX_MID_URL__", FOREST_PARALLAX_MID_URL)
+        .replace("__FOREST_PARALLAX_FRONT_URL__", FOREST_PARALLAX_FRONT_URL)
+        .replace("__FOREST_PARALLAX_OVERLAY_URL__", FOREST_PARALLAX_OVERLAY_URL)
+        .replace("__ALPINE_PARALLAX_SKY_URL__", ALPINE_PARALLAX_SKY_URL)
+        .replace("__ALPINE_PARALLAX_FAR_URL__", ALPINE_PARALLAX_FAR_URL)
+        .replace("__ALPINE_PARALLAX_MID_URL__", ALPINE_PARALLAX_MID_URL)
+        .replace("__ALPINE_PARALLAX_CLOUDS_URL__", ALPINE_PARALLAX_CLOUDS_URL)
+        .replace("__NEON_PARALLAX_STARS_URL__", NEON_PARALLAX_STARS_URL)
+        .replace("__NEON_PARALLAX_BACK_URL__", NEON_PARALLAX_BACK_URL)
+        .replace("__NEON_PARALLAX_MID_URL__", NEON_PARALLAX_MID_URL)
+        .replace("__NEON_PARALLAX_FRONT_URL__", NEON_PARALLAX_FRONT_URL)
+        .replace("__NEON_PARALLAX_CLOUDS_URL__", NEON_PARALLAX_CLOUDS_URL)
         .replace("__DMD_CYCLIST_URL__", DMD_CYCLIST_URL)
     )
 
@@ -2382,6 +2436,7 @@ def run_web_ui(
             "window.veloxUpdateScene("
             f"{state.speed if state.speed is not None else 0},"
             f"{state.cadence if state.cadence is not None else 0},"
+            f"{state.power if state.power is not None else 0},"
             f"{'true' if in_zone_for_scene else 'false'},"
             f"'{scene_action}'"
             ");"
