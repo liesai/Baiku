@@ -49,6 +49,8 @@ ASSETS_ROUTE = "/velox-assets"
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 SPRITE_URL = f"{ASSETS_ROUTE}/cyclist_sprite_aligned.png"
 SCENE_BG_URL = f"{ASSETS_ROUTE}/forest_bg.png"
+SCENE_BG_ALT_1_URL = f"{ASSETS_ROUTE}/forest_bg_alt_1.jpg"
+SCENE_BG_ALT_2_URL = f"{ASSETS_ROUTE}/forest_bg_alt_2.jpg"
 DMD_CYCLIST_URL = f"{ASSETS_ROUTE}/dmd_cyclist_bonus.png"
 _ASSETS_MOUNTED = False
 
@@ -387,41 +389,181 @@ def run_web_ui(
             position: relative;
             width: 100%;
             min-width: 100%;
-            height: 144px;
+            height: 176px;
             border: 1px solid rgba(56, 189, 248, 0.35);
             border-radius: 12px;
             overflow: hidden;
             background: linear-gradient(180deg, #0a2a4e 0%, #15426d 58%, #0f2f52 100%);
-            --ve-bg-offset: 0px;
+            --ve-bg-far-offset: 0px;
+            --ve-bg-mid-offset: 0px;
+            --ve-bg-front-offset: 0px;
+            --ve-road-offset: 0px;
             --ve-pedal-rot: 0deg;
             --ve-rider-bob: 0px;
             --ve-sprite-shift-x: 0px;
+            --ve-accent: rgba(56, 189, 248, 0.35);
+            --ve-glow: rgba(34, 211, 238, 0.18);
+            --ve-road-line: rgba(248, 250, 252, 0.9);
           }
           .ve-scene[data-zone="ok"] { box-shadow: inset 0 0 0 2px rgba(34,197,94,.25); }
           .ve-scene[data-zone="bad"] { box-shadow: inset 0 0 0 2px rgba(239,68,68,.25); }
           .ve-scene[data-action="up"] .ve-hud-action { color: #f59e0b; }
           .ve-scene[data-action="down"] .ve-hud-action { color: #ef4444; }
           .ve-scene[data-action="steady"] .ve-hud-action { color: #22c55e; }
+          .ve-scene[data-theme="forest"] {
+            background:
+              linear-gradient(180deg, rgba(15, 90, 88, 0.18) 0%, rgba(8, 23, 32, 0) 45%),
+              linear-gradient(180deg, #0c2740 0%, #17425f 56%, #12263b 100%);
+            --ve-accent: rgba(74, 222, 128, 0.28);
+            --ve-glow: rgba(34, 197, 94, 0.16);
+            --ve-road-line: rgba(226, 232, 240, 0.92);
+          }
+          .ve-scene[data-theme="alpine"] {
+            background:
+              linear-gradient(180deg, rgba(253, 186, 116, 0.28) 0%, rgba(251, 191, 36, 0.02) 38%),
+              linear-gradient(180deg, #132a58 0%, #27538d 52%, #153258 100%);
+            --ve-accent: rgba(253, 186, 116, 0.3);
+            --ve-glow: rgba(251, 191, 36, 0.16);
+            --ve-road-line: rgba(255, 248, 220, 0.9);
+          }
+          .ve-scene[data-theme="neon"] {
+            background:
+              radial-gradient(circle at top center, rgba(244, 114, 182, 0.18) 0%, rgba(0, 0, 0, 0) 34%),
+              linear-gradient(180deg, #020617 0%, #071229 46%, #050816 100%);
+            --ve-accent: rgba(167, 139, 250, 0.4);
+            --ve-glow: rgba(244, 114, 182, 0.18);
+            --ve-road-line: rgba(45, 212, 191, 0.9);
+          }
           .ve-bg {
             position: absolute;
             left: 0;
             top: 0;
             right: 0;
             bottom: 0;
-            background-image: url('__SCENE_BG_URL__');
             background-repeat: repeat-x;
-            background-size: auto 100%;
             image-rendering: pixelated;
           }
-          .ve-bg-main {
-            opacity: 1;
-            background-position-x: var(--ve-bg-offset);
-            filter: saturate(1.05) contrast(1.02);
+          .ve-bg-sky {
+            background:
+              radial-gradient(circle at 22% 20%, rgba(255,255,255,0.28) 0 8%, rgba(255,255,255,0) 9%),
+              radial-gradient(circle at 70% 18%, rgba(255,255,255,0.22) 0 7%, rgba(255,255,255,0) 8%),
+              linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 42%);
+            opacity: .9;
+          }
+          .ve-bg-far {
+            bottom: 24px;
+            background-image: url('__SCENE_BG_ALT_1_URL__');
+            background-size: auto 108%;
+            background-position: var(--ve-bg-far-offset) center;
+            opacity: .28;
+            filter: saturate(0.9) blur(.4px);
+          }
+          .ve-bg-mid {
+            bottom: 8px;
+            background-image: url('__SCENE_BG_URL__');
+            background-size: auto 118%;
+            background-position: var(--ve-bg-mid-offset) center;
+            opacity: .84;
+            filter: saturate(1.08) contrast(1.04);
+          }
+          .ve-bg-front {
+            top: 18px;
+            background-image: url('__SCENE_BG_ALT_2_URL__');
+            background-size: auto 128%;
+            background-position: var(--ve-bg-front-offset) center;
+            opacity: .28;
+            filter: saturate(1.12) contrast(1.06);
+            mix-blend-mode: screen;
+          }
+          .ve-bg-overlay {
+            background: radial-gradient(circle at 50% 35%, var(--ve-glow) 0%, rgba(2,6,23,0) 42%);
+            opacity: .9;
+          }
+          .ve-scene[data-theme="alpine"] .ve-bg-sky {
+            background:
+              radial-gradient(circle at 18% 24%, rgba(255,255,255,0.36) 0 7%, rgba(255,255,255,0) 8%),
+              radial-gradient(circle at 68% 20%, rgba(255,255,255,0.28) 0 8%, rgba(255,255,255,0) 9%),
+              linear-gradient(180deg, rgba(253,186,116,0.28) 0%, rgba(255,255,255,0.02) 46%);
+          }
+          .ve-scene[data-theme="alpine"] .ve-bg-far {
+            opacity: .32;
+            filter: saturate(.72) hue-rotate(-25deg) brightness(1.25);
+          }
+          .ve-scene[data-theme="alpine"] .ve-bg-mid {
+            opacity: .7;
+            filter: saturate(.74) hue-rotate(-28deg) brightness(1.16);
+          }
+          .ve-scene[data-theme="alpine"] .ve-bg-front {
+            opacity: .18;
+            filter: saturate(.55) hue-rotate(-24deg) brightness(1.35);
+          }
+          .ve-scene[data-theme="neon"] .ve-bg-sky {
+            background:
+              radial-gradient(circle at 22% 18%, rgba(244,114,182,0.28) 0 5%, rgba(244,114,182,0) 8%),
+              radial-gradient(circle at 80% 14%, rgba(45,212,191,0.24) 0 4%, rgba(45,212,191,0) 7%),
+              linear-gradient(180deg, rgba(15,23,42,0.22) 0%, rgba(255,255,255,0) 46%);
+          }
+          .ve-scene[data-theme="neon"] .ve-bg-far {
+            opacity: .2;
+            filter: saturate(.6) hue-rotate(120deg) brightness(.7);
+          }
+          .ve-scene[data-theme="neon"] .ve-bg-mid {
+            opacity: .26;
+            filter: saturate(1.25) hue-rotate(135deg) brightness(.6);
+          }
+          .ve-scene[data-theme="neon"] .ve-bg-front {
+            opacity: .15;
+            filter: saturate(1.65) hue-rotate(115deg) brightness(.72);
+            mix-blend-mode: lighten;
+          }
+          .ve-road {
+            position: absolute;
+            left: -6%;
+            right: -6%;
+            bottom: -8px;
+            height: 56px;
+            background:
+              linear-gradient(180deg, rgba(148,163,184,0.16) 0%, rgba(15,23,42,0) 20%),
+              linear-gradient(180deg, rgba(15,23,42,0.1) 0%, rgba(15,23,42,0.75) 100%);
+            clip-path: polygon(12% 0%, 88% 0%, 100% 100%, 0% 100%);
+            z-index: 4;
+          }
+          .ve-road::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background:
+              repeating-linear-gradient(
+                90deg,
+                rgba(255,255,255,0) 0 36px,
+                var(--ve-road-line) 36px 58px,
+                rgba(255,255,255,0) 58px 110px
+              );
+            background-position-x: var(--ve-road-offset);
+            opacity: .55;
+          }
+          .ve-road::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(15,23,42,0) 0%, rgba(15,23,42,0.64) 100%);
+          }
+          .ve-scenery-badge {
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            color: #bfdbfe;
+            padding: 0.22rem 0.45rem;
+            border-radius: 999px;
+            border: 1px solid var(--ve-accent);
+            background: rgba(2, 6, 23, 0.35);
+            box-shadow: 0 0 12px rgba(2, 6, 23, 0.24);
           }
           .ve-rider {
             position: absolute;
             left: 74px;
-            bottom: 14px;
+            bottom: 28px;
             width: 112px;
             height: 74px;
             transform: translateY(var(--ve-rider-bob));
@@ -453,6 +595,7 @@ def run_web_ui(
             border-radius: 8px;
             padding: 3px 7px;
             color: #e2e8f0;
+            z-index: 7;
           }
           .ve-hud-speed { color: #7dd3fc; }
           .ve-fx {
@@ -515,19 +658,28 @@ def run_web_ui(
             const actionNode = document.getElementById('ve-scene-action');
             const spriteNode = document.getElementById('ve-sprite');
             const state = window.__velox_scene_state || {
-              bg: 0,
+              far: 0,
+              mid: 0,
+              front: 0,
+              road: 0,
               pedal: 0,
               bobTick: 0,
               frameTick: 0,
             };
             const s = Math.max(0, Number(speed || 0));
             const c = Math.max(0, Number(cadence || 0));
-            state.bg = (state.bg - Math.max(0.15, s * 0.25)) % 900;
+            state.far = (state.far - Math.max(0.08, s * 0.06)) % 1400;
+            state.mid = (state.mid - Math.max(0.15, s * 0.16)) % 1400;
+            state.front = (state.front - Math.max(0.25, s * 0.34)) % 1400;
+            state.road = (state.road - Math.max(1.2, s * 0.95)) % 240;
             state.pedal = (state.pedal + (c * 0.92)) % 360;
             state.bobTick += 0.35;
             state.frameTick += Math.max(0.25, c / 65);
             const bob = Math.sin(state.bobTick + c / 20) * Math.min(2.5, 0.6 + c / 65);
-            scene.style.setProperty('--ve-bg-offset', `${state.bg}px`);
+            scene.style.setProperty('--ve-bg-far-offset', `${state.far}px`);
+            scene.style.setProperty('--ve-bg-mid-offset', `${state.mid}px`);
+            scene.style.setProperty('--ve-bg-front-offset', `${state.front}px`);
+            scene.style.setProperty('--ve-road-offset', `${state.road}px`);
             scene.style.setProperty('--ve-pedal-rot', `${state.pedal}deg`);
             scene.style.setProperty('--ve-rider-bob', `${bob}px`);
             scene.dataset.zone = inZone ? 'ok' : 'bad';
@@ -546,6 +698,19 @@ def run_web_ui(
               else actionNode.textContent = 'HOLD';
             }
             window.__velox_scene_state = state;
+          };
+          window.veloxSetSceneTheme = function(theme) {
+            const scene = document.getElementById('ve-scene');
+            const labelNode = document.getElementById('ve-scene-theme-label');
+            if (!scene) return;
+            const nextTheme = ['forest', 'alpine', 'neon'].includes(theme) ? theme : 'forest';
+            const labels = {
+              forest: 'Forest trail',
+              alpine: 'Alpine dawn',
+              neon: 'Neon night',
+            };
+            scene.dataset.theme = nextTheme;
+            if (labelNode) labelNode.textContent = labels[nextTheme] || 'Forest trail';
           };
           window.veloxPinballFx = function(kind, label) {
             const scene = document.getElementById('ve-scene');
@@ -856,6 +1021,8 @@ def run_web_ui(
         """
         .replace("__SPRITE_URL__", SPRITE_URL)
         .replace("__SCENE_BG_URL__", SCENE_BG_URL)
+        .replace("__SCENE_BG_ALT_1_URL__", SCENE_BG_ALT_1_URL)
+        .replace("__SCENE_BG_ALT_2_URL__", SCENE_BG_ALT_2_URL)
         .replace("__DMD_CYCLIST_URL__", DMD_CYCLIST_URL)
     )
 
@@ -1191,12 +1358,27 @@ def run_web_ui(
                 game_streak_label = ui.label("Streak: 0").classes("text-sm gb-pixel")
                 game_goal_label = ui.label("Goal: -").classes("text-xs gb-pixel")
                 game_goal_progress_label = ui.label("0/0 s").classes("text-xs gb-pixel")
+            with ui.row().classes("w-full items-center justify-between gap-3 flex-wrap"):
+                ui.label("Arcade scenery demo").classes("text-xs font-semibold uppercase tracking-wider text-slate-300")
+                scene_theme_toggle = ui.toggle(
+                    {"forest": "Forest trail", "alpine": "Alpine dawn", "neon": "Neon night"},
+                    value="forest",
+                    on_change=lambda e: _safe_run_js(
+                        f"window.veloxSetSceneTheme('{e.value}');"
+                    ),
+                ).props("toggle-color=cyan glossy unelevated")
             ui.html(
                 """
-                <div id="ve-scene" class="ve-scene" data-zone="ok">
-                  <div class="ve-bg ve-bg-main"></div>
+                <div id="ve-scene" class="ve-scene" data-zone="ok" data-theme="forest">
+                  <div class="ve-bg ve-bg-sky"></div>
+                  <div class="ve-bg ve-bg-far"></div>
+                  <div class="ve-bg ve-bg-mid"></div>
+                  <div class="ve-bg ve-bg-front"></div>
+                  <div class="ve-bg ve-bg-overlay"></div>
+                  <div class="ve-road"></div>
                   <div id="ve-fx" class="ve-fx">BONUS!</div>
                   <div class="ve-hud">
+                    <span id="ve-scene-theme-label" class="ve-scenery-badge">Forest trail</span>
                     <span id="ve-scene-action" class="ve-hud-action">HOLD</span>
                     <span id="ve-scene-speed" class="ve-hud-speed">0,0 km/h</span>
                   </div>
