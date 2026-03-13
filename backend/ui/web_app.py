@@ -109,6 +109,35 @@ def _fmt_duration(total_seconds: int) -> str:
     return f"{minutes:02d}:{seconds:02d}"
 
 
+def _phase_cue_text(progress: WorkoutProgress) -> str:
+    countdown = progress.transition_countdown_sec
+    if countdown is None:
+        return "-"
+    if countdown > 0:
+        return str(countdown)
+    label = (progress.transition_label or progress.step_label).lower()
+    if any(token in label for token in ("recover", "off", "facile", "souple", "cool")):
+        return "RECUP"
+    return "GO"
+
+
+def _phase_cue_kind(progress: WorkoutProgress) -> str:
+    label = (progress.transition_label or progress.step_label).lower()
+    if any(token in label for token in ("recover", "off", "facile", "souple", "cool")):
+        return "phase-recover"
+    return "phase-effort"
+
+
+def _transition_status_text(progress: WorkoutProgress) -> str:
+    countdown = progress.transition_countdown_sec
+    label = progress.transition_label or progress.step_label
+    if countdown is None:
+        return "Transition: -"
+    if countdown > 0:
+        return f"Transition dans {countdown}s: {label}"
+    return f"Phase: {label}"
+
+
 def _fmt_timeline_mark(total_seconds: int) -> str:
     rounded_min = int(round((total_seconds / 60.0) / 10.0) * 10)
     if rounded_min % 10 != 0:
@@ -450,6 +479,8 @@ def run_web_ui(
           .ve-fx.jackpot { color: #facc15; }
           .ve-fx.coach { color: #86efac; }
           .ve-fx.phase { color: #fcd34d; }
+          .ve-fx.phase-effort { color: #fb7185; }
+          .ve-fx.phase-recover { color: #22d3ee; }
           .ve-scene.fx-jackpot {
             box-shadow: inset 0 0 0 2px rgba(250,204,21,.45), 0 0 24px rgba(250,204,21,.38);
           }
@@ -542,10 +573,17 @@ def run_web_ui(
             const scene = document.getElementById('ve-scene');
             const fx = document.getElementById('ve-fx');
             if (!scene || !fx) return;
-            const cssKind = (kind === 'phase') ? 'phase' : 'coach';
-            fx.classList.remove('bonus', 'multi', 'jackpot', 'coach', 'phase', 'show');
+            const cssKind = (
+              kind === 'phase-effort' || kind === 'phase-recover' || kind === 'phase'
+            ) ? kind : 'coach';
+            fx.classList.remove(
+              'bonus', 'multi', 'jackpot', 'coach', 'phase', 'phase-effort',
+              'phase-recover', 'show'
+            );
             fx.classList.add(cssKind);
-            fx.textContent = label || (cssKind === 'phase' ? 'TRANSITION' : 'GOOD JOB');
+            fx.textContent = label || (
+              cssKind === 'coach' ? 'GOOD JOB' : 'TRANSITION'
+            );
             void fx.offsetWidth;
             fx.classList.add('show');
             const duration = Math.max(1100, Number(durationMs || 1700));
@@ -847,6 +885,7 @@ def run_web_ui(
     pinball_last_step_seen = 0
     pinball_last_jackpot_ts = 0.0
     last_encourage_bucket: int | None = None
+    last_transition_marker: tuple[int, int, str] | None = None
     analytics_demo_mode = False
     analytics_window = 7
 
@@ -1115,6 +1154,9 @@ def run_web_ui(
                     compliance_info = ui.label("Compliance: -").classes("text-sm")
                 with ui.row().classes("w-full items-center gap-4 flex-wrap"):
                     next_step_label = ui.label("Next: -").classes("text-sm gb-muted")
+                    transition_status_label = ui.label("Transition: -").classes(
+                        "text-sm gb-muted font-semibold"
+                    )
                     target_label = ui.label("Targets: -").classes("text-sm gb-muted")
                     mode_label = ui.label("Mode: ERG").classes("text-sm gb-muted")
                     sound_toggle = ui.switch("Sound alerts", value=True).classes("text-sm")
@@ -1863,6 +1905,7 @@ def run_web_ui(
     def refresh_ui() -> None:
         nonlocal last_coaching_alert_key, sound_alerts
         nonlocal last_encourage_bucket
+        nonlocal last_transition_marker
         status_label.text = f"Status: {state.status}"
         ht_icon.style(f"color: {'#22c55e' if state.connected else '#6b7280'};")
         hm_icon.style(f"color: {'#22c55e' if state.hm_connected else '#6b7280'};")
@@ -1962,17 +2005,20 @@ def run_web_ui(
                 )
             else:
                 next_step_label.text = "Next: finish"
+            transition_status_label.text = _transition_status_text(state.progress)
         else:
             step_info.text = "Step: -"
             elapsed_label.text = "Elapsed: 00:00"
             remaining_label.text = "Remaining: 00:00"
             next_step_label.text = "Next: -"
+            transition_status_label.text = "Transition: -"
             target_label.text = "Targets: -"
             guidance_label.text = "Action: -"
             guidance_label.style("color: #cbd5e1; font-weight: 600;")
             coaching_stabilizer.reset()
             last_coaching_alert_key = None
             last_encourage_bucket = None
+            last_transition_marker = None
         target_bits: list[str] = []
         if expected_power_min is not None and expected_power_max is not None:
             target_bits.append(f"Power {expected_power_min}-{expected_power_max}W")
@@ -2434,15 +2480,37 @@ def run_web_ui(
                     trigger_pinball_pattern("jackpot_rush")
 
     def on_progress(progress: WorkoutProgress) -> None:
+        nonlocal last_transition_marker
         state.progress = progress
+        if progress.transition_countdown_sec is None:
+            last_transition_marker = None
+            return
+        marker = (
+            progress.step_index,
+            progress.transition_countdown_sec,
+            progress.transition_label or progress.step_label,
+        )
+        if marker == last_transition_marker:
+            return
+        last_transition_marker = marker
+        cue_text = _phase_cue_text(progress)
+        cue_kind = _phase_cue_kind(progress)
+        cue_duration = 900 if progress.transition_countdown_sec > 0 else 1400
+        _safe_run_js(
+            "window.veloxCoachCue("
+            f"'{cue_kind}', '{cue_text}', {cue_duration}"
+            ");"
+        )
 
     def on_finish(completed: bool) -> None:
+        nonlocal last_transition_marker
         ended_workout_name = state.workout.name if state.workout is not None else "-"
         elapsed_sec = state.progress.elapsed_total_sec if state.progress is not None else 0
         both_pct = _compute_both_compliance_pct()
         avg_power, avg_cadence, avg_speed = _compute_session_averages()
         _save_session_snapshot(completed)
         state.progress = None
+        last_transition_marker = None
         state.status = "Workout completed" if completed else "Workout stopped"
         summary_status_label.text = (
             "Status: Completed" if completed else "Status: Stopped"

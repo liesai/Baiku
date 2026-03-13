@@ -18,6 +18,8 @@ class WorkoutProgress:
     step_index: int
     step_total: int
     step_label: str
+    transition_label: str | None
+    transition_countdown_sec: int | None
     target_watts: int
     target_mode: TargetMode
     target_display_value: float
@@ -87,6 +89,7 @@ class WorkoutRunner:
             for index, step in enumerate(plan.steps, start=1):
                 if self._stop_event.is_set():
                     break
+                next_step = plan.steps[index] if index < len(plan.steps) else None
 
                 target_value, target_unit = await self._apply_step_target(
                     step,
@@ -100,6 +103,7 @@ class WorkoutRunner:
                     target_unit=target_unit,
                     step_index=index,
                     step_total=len(plan.steps),
+                    next_step=next_step,
                     elapsed_offset_sec=elapsed_offset,
                     total_duration_sec=plan.total_duration_sec,
                     on_progress=on_progress,
@@ -155,22 +159,36 @@ class WorkoutRunner:
         target_unit: str,
         step_index: int,
         step_total: int,
+        next_step: WorkoutStep | None,
         elapsed_offset_sec: int,
         total_duration_sec: int,
         on_progress: ProgressCallback,
     ) -> None:
         label = step.label or f"Step {step_index}"
+        next_label = None
+        if next_step is not None:
+            next_label = next_step.label or f"Step {step_index + 1}"
         for remaining in range(step.duration_sec, 0, -1):
             if self._stop_event.is_set():
                 return
             step_elapsed = (step.duration_sec - remaining) + 1
             elapsed_total = elapsed_offset_sec + step_elapsed
+            transition_countdown_sec: int | None = None
+            transition_label: str | None = None
+            if next_label is not None and remaining <= 3:
+                transition_countdown_sec = remaining
+                transition_label = next_label
+            elif step_index > 1 and step_elapsed == 1:
+                transition_countdown_sec = 0
+                transition_label = label
 
             on_progress(
                 WorkoutProgress(
                     step_index=step_index,
                     step_total=step_total,
                     step_label=label,
+                    transition_label=transition_label,
+                    transition_countdown_sec=transition_countdown_sec,
                     target_watts=step.target_watts,
                     target_mode=target_mode,
                     target_display_value=target_value,

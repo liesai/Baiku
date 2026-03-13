@@ -51,6 +51,22 @@ def test_ui_like_start_stop_and_sim_variations() -> None:
 
         assert any(p.step_label == "Warmup" for p in progresses)
         assert any(p.step_label == "Build" for p in progresses)
+        assert any(
+            p.transition_countdown_sec == 3 and p.transition_label == "Build"
+            for p in progresses
+        )
+        assert any(
+            p.transition_countdown_sec == 2 and p.transition_label == "Build"
+            for p in progresses
+        )
+        assert any(
+            p.transition_countdown_sec == 1 and p.transition_label == "Build"
+            for p in progresses
+        )
+        assert any(
+            p.transition_countdown_sec == 0 and p.transition_label == "Build"
+            for p in progresses
+        )
 
         powers = [s.instantaneous_power for s in samples if s.instantaneous_power is not None]
         assert len(powers) > 3
