@@ -1460,31 +1460,31 @@ def run_web_ui(
 
             const riderShadow = new T.Mesh(
               new T.CircleGeometry(1.9, 24),
-              new T.MeshBasicMaterial({ color: 0x020617, transparent: true, opacity: 0.28 }),
+              new T.MeshBasicMaterial({ color: 0x020617, transparent: true, opacity: 0.34 }),
             );
             riderShadow.rotation.x = -Math.PI / 2;
             riderShadow.position.set(0, -0.98, 0.45);
             rider.add(riderShadow);
             const riderAura = new T.Mesh(
               new T.CircleGeometry(2.2, 28),
-              new T.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.045 }),
+              new T.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.07 }),
             );
             riderAura.position.set(0.1, 0.7, -0.18);
             rider.add(riderAura);
 
-            const tireMat = makeMat(0x111827, 0x0f172a, 0.12, 1);
-            const rimMat = makeMat(0x60a5fa, 0x38bdf8, 0.52, 1);
-            const spokeMat = makeMat(0xb6d8ff, 0x93c5fd, 0.18, 0.92);
-            const frameMat = makeMat(0x2563eb, 0x38bdf8, 0.34, 1);
-            const frameHotMat = makeMat(0x1d4ed8, 0x67e8f9, 0.4, 1);
+            const tireMat = makeMat(0x020617, 0x0f172a, 0.16, 1);
+            const rimMat = makeMat(0x93c5fd, 0x67e8f9, 0.68, 1);
+            const spokeMat = makeMat(0xe0f2fe, 0xbae6fd, 0.26, 0.95);
+            const frameMat = makeMat(0x1d4ed8, 0x38bdf8, 0.42, 1);
+            const frameHotMat = makeMat(0x2563eb, 0x67e8f9, 0.52, 1);
             const skinFrontMat = makeMat(0xfdba74, 0xffedd5, 0.08, 1);
             const skinRearMat = makeMat(0xf59e0b, 0xffedd5, 0.04, 0.94);
-            const shortMat = makeMat(0x0f172a, 0x1e293b, 0.16, 1);
-            const jerseyMat = makeMat(0xef4444, 0xfb7185, 0.22, 1);
+            const shortMat = makeMat(0x020617, 0x1e293b, 0.2, 1);
+            const jerseyMat = makeMat(0xef4444, 0xfb7185, 0.28, 1);
             const gloveMat = makeMat(0x111827, 0x1e293b, 0.08, 1);
             const shoeMat = makeMat(0x111827, 0x1e293b, 0.08, 1);
-            const helmetMat = makeMat(0xef4444, 0xffffff, 0.24, 1);
-            const visorMat = makeMat(0x0f172a, 0x1e293b, 0.08, 0.96);
+            const helmetMat = makeMat(0xef4444, 0xffffff, 0.3, 1);
+            const visorMat = makeMat(0x0f172a, 0x38bdf8, 0.14, 0.96);
 
             function makeFlatBar(thickness, depth, mat) {
               const mesh = new T.Mesh(new T.BoxGeometry(thickness, 1, depth), mat);
@@ -1509,16 +1509,20 @@ def run_web_ui(
 
             function makeWheel(x, z) {
               const g = new T.Group();
-              const tire = new T.Mesh(new T.TorusGeometry(0.98, 0.08, 10, 32), tireMat);
-              const rim = new T.Mesh(new T.TorusGeometry(0.82, 0.035, 8, 28), rimMat);
-              const hub = new T.Mesh(new T.CircleGeometry(0.12, 16), rimMat);
-              const spokeA = new T.Mesh(new T.BoxGeometry(0.045, 1.46, 0.03), spokeMat);
-              const spokeB = new T.Mesh(new T.BoxGeometry(1.46, 0.045, 0.03), spokeMat);
+              const tire = new T.Mesh(new T.TorusGeometry(0.98, 0.07, 10, 34), tireMat);
+              const rim = new T.Mesh(new T.TorusGeometry(0.83, 0.028, 8, 30), rimMat);
+              const hub = new T.Mesh(new T.CircleGeometry(0.11, 18), rimMat);
+              const spokeA = new T.Mesh(new T.BoxGeometry(0.034, 1.5, 0.03), spokeMat);
+              const spokeB = new T.Mesh(new T.BoxGeometry(1.5, 0.034, 0.03), spokeMat);
               const spokeC = spokeA.clone();
               spokeC.rotation.z = Math.PI / 4;
               const spokeD = spokeA.clone();
               spokeD.rotation.z = -Math.PI / 4;
-              g.add(tire, rim, spokeA, spokeB, spokeC, spokeD, hub);
+              const wheelGlow = new T.Mesh(
+                new T.RingGeometry(0.9, 1.02, 32),
+                new T.MeshBasicMaterial({ color: 0x67e8f9, transparent: true, opacity: 0.08 }),
+              );
+              g.add(wheelGlow, tire, rim, spokeA, spokeB, spokeC, spokeD, hub);
               g.position.set(x, 0, z);
               return g;
             }
@@ -1539,13 +1543,13 @@ def run_web_ui(
               makeFlatBar(0.08, 0.08, gloveMat),
             ];
             frameBars.forEach((bar) => rider.add(bar));
-            const saddle = new T.Mesh(new T.BoxGeometry(0.48, 0.11, 0.22), shortMat);
+            const saddle = new T.Mesh(new T.BoxGeometry(0.54, 0.09, 0.18), shortMat);
             saddle.position.set(-0.78, 1.58, -0.02);
             saddle.rotation.z = -0.04;
             const stem = new T.Mesh(new T.BoxGeometry(0.08, 0.34, 0.06), frameHotMat);
             stem.position.set(1.36, 1.46, 0.08);
             stem.rotation.z = -0.6;
-            const handlebar = new T.Mesh(new T.BoxGeometry(0.48, 0.08, 0.06), gloveMat);
+            const handlebar = new T.Mesh(new T.BoxGeometry(0.52, 0.07, 0.06), gloveMat);
             handlebar.position.set(1.9, 1.62, 0.1);
             handlebar.rotation.z = -0.12;
             rider.add(saddle, stem, handlebar);
