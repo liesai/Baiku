@@ -1540,13 +1540,13 @@ def run_web_ui(
             ];
             frameBars.forEach((bar) => rider.add(bar));
             const saddle = new T.Mesh(new T.BoxGeometry(0.48, 0.11, 0.22), shortMat);
-            saddle.position.set(-0.76, 1.58, -0.02);
+            saddle.position.set(-0.78, 1.58, -0.02);
             saddle.rotation.z = -0.04;
             const stem = new T.Mesh(new T.BoxGeometry(0.08, 0.34, 0.06), frameHotMat);
-            stem.position.set(1.3, 1.45, 0.08);
+            stem.position.set(1.28, 1.44, 0.08);
             stem.rotation.z = -0.72;
             const handlebar = new T.Mesh(new T.BoxGeometry(0.48, 0.08, 0.06), gloveMat);
-            handlebar.position.set(1.8, 1.62, 0.1);
+            handlebar.position.set(1.78, 1.6, 0.1);
             handlebar.rotation.z = -0.18;
             rider.add(saddle, stem, handlebar);
 
@@ -1773,15 +1773,15 @@ def run_web_ui(
                 frontWheel.rotation.z = state.wheel;
                 crank.rotation.z = pedalAngle;
 
-                placeFlatBar(frameBars[0], -0.34, 1.26, 1.24, 1.3, 0.04);
-                placeFlatBar(frameBars[1], 0.02, 0.08, -0.34, 1.26, -0.03);
+                placeFlatBar(frameBars[0], -0.38, 1.28, 1.18, 1.26, 0.04);
+                placeFlatBar(frameBars[1], -1.72, 0, -0.38, 1.28, -0.03);
                 placeFlatBar(frameBars[2], -1.72, 0, 0.02, 0.08, 0.02);
-                placeFlatBar(frameBars[3], 0.02, 0.08, 1.06, 0.5, 0.03);
-                placeFlatBar(frameBars[4], 0.02, 0.08, -0.34, 1.26, -0.01);
-                placeFlatBar(frameBars[5], 1.24, 1.3, 1.06, 0.5, 0.05);
-                placeFlatBar(frameBars[6], 1.06, 0.5, 1.7, 0.02, 0.07);
-                placeFlatBar(frameBars[7], -0.34, 1.26, -0.76, 1.58, -0.04);
-                placeFlatBar(frameBars[8], 1.24, 1.3, 1.8, 1.62, 0.07);
+                placeFlatBar(frameBars[3], 0.02, 0.08, 1.02, 0.56, 0.03);
+                placeFlatBar(frameBars[4], 0.02, 0.08, -0.38, 1.28, -0.01);
+                placeFlatBar(frameBars[5], 1.18, 1.26, 1.02, 0.56, 0.05);
+                placeFlatBar(frameBars[6], 1.02, 0.56, 1.7, 0.02, 0.07);
+                placeFlatBar(frameBars[7], -0.38, 1.28, -0.78, 1.58, -0.04);
+                placeFlatBar(frameBars[8], 1.18, 1.26, 1.78, 1.6, 0.07);
 
                 torso.position.set(0.08, 1.74, 0.06);
                 torso.rotation.z = bodyLean;
