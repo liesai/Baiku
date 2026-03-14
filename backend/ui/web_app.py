@@ -47,7 +47,7 @@ ACTION_SWITCH_MIN_SEC = 2.0
 HT_CONNECT_TIMEOUT_SEC = 40.0
 ASSETS_ROUTE = "/velox-assets"
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
-SPRITE_URL = f"{ASSETS_ROUTE}/cyclist_sprite_aligned.png"
+SPRITE_URL = f"{ASSETS_ROUTE}/cyclist_sprite_user_v3.png"
 SCENE_BG_URL = f"{ASSETS_ROUTE}/forest_bg.png"
 SCENE_BG_ALT_1_URL = f"{ASSETS_ROUTE}/forest_bg_alt_1.jpg"
 SCENE_BG_ALT_2_URL = f"{ASSETS_ROUTE}/forest_bg_alt_2.jpg"
@@ -856,7 +856,7 @@ def run_web_ui(
             image-rendering: pixelated;
             background-image: url('__SPRITE_URL__');
             background-repeat: no-repeat;
-            background-size: 300% 100%;
+            background-size: 700% 100%;
             background-position: 0% 0;
             transform:
               translateX(var(--ve-sprite-shift-x))
@@ -1043,11 +1043,11 @@ def run_web_ui(
             else if (intensityScore < 0.5) intensity = 'low';
             scene.dataset.intensity = intensity;
             if (spriteNode) {
-              const framePhase = Math.floor(state.frameTick) % 4;
-              const frameMap = [0, 1, 2, 1];
+              const framePhase = Math.floor(state.frameTick) % 12;
+              const frameMap = [0, 1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1];
               const frame = frameMap[framePhase];
-              const x = frame * 50;
-              const shiftByFrame = [0, -1, 0, 1];
+              const x = frame * (100 / 6);
+              const shiftByFrame = [0, -1, -1, 0, 1, 1, 0, 1, 1, 0, -1, -1];
               spriteNode.style.backgroundPosition = `${x}% 0%`;
               scene.style.setProperty('--ve-sprite-shift-x', `${shiftByFrame[framePhase]}px`);
             }
