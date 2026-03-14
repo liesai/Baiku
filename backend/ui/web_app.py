@@ -402,7 +402,7 @@ def run_web_ui(
             position: relative;
             width: 100%;
             min-width: 100%;
-            height: 176px;
+            height: 164px;
             border: 1px solid rgba(56, 189, 248, 0.35);
             border-radius: 12px;
             overflow: hidden;
@@ -415,7 +415,7 @@ def run_web_ui(
             --ve-rider-bob: 0px;
             --ve-sprite-shift-x: 0px;
             --ve-rider-tilt: -2deg;
-            --ve-rider-scale: 1;
+            --ve-rider-scale: .88;
             --ve-rider-shadow-opacity: .26;
             --ve-rider-shadow-blur: 10px;
             --ve-rider-pulse: 0;
@@ -438,29 +438,29 @@ def run_web_ui(
             --ve-scene-boost: .92;
             --ve-overlay-opacity: .58;
             --ve-rider-tilt: -1deg;
-            --ve-rider-scale: .98;
+            --ve-rider-scale: .84;
             --ve-rider-shadow-opacity: .18;
             --ve-rider-dust-opacity: .08;
-            --ve-rider-speed-opacity: .04;
+            --ve-rider-speed-opacity: 0;
           }
           .ve-scene[data-intensity="mid"] {
             --ve-scene-boost: 1;
             --ve-overlay-opacity: .86;
             --ve-rider-tilt: -2deg;
-            --ve-rider-scale: 1;
+            --ve-rider-scale: .88;
             --ve-rider-shadow-opacity: .24;
             --ve-rider-dust-opacity: .16;
-            --ve-rider-speed-opacity: .1;
+            --ve-rider-speed-opacity: .04;
           }
           .ve-scene[data-intensity="high"] {
             --ve-scene-boost: 1.12;
             --ve-overlay-opacity: 1;
-            --ve-rider-tilt: -5deg;
-            --ve-rider-scale: 1.04;
+            --ve-rider-tilt: -4deg;
+            --ve-rider-scale: .93;
             --ve-rider-shadow-opacity: .32;
             --ve-rider-shadow-blur: 14px;
             --ve-rider-dust-opacity: .28;
-            --ve-rider-speed-opacity: .22;
+            --ve-rider-speed-opacity: .1;
           }
           .ve-scene[data-theme="forest"] {
             background:
@@ -813,8 +813,8 @@ def run_web_ui(
           }
           .ve-rider {
             position: absolute;
-            left: 70px;
-            bottom: 22px;
+            left: 46px;
+            bottom: 14px;
             width: 132px;
             height: 88px;
             transform:
@@ -828,19 +828,19 @@ def run_web_ui(
             filter: drop-shadow(0 0 12px rgba(255,255,255,0.08));
           }
           .ve-scene[data-theme="alpine"] .ve-rider {
-            bottom: 24px;
-            left: 76px;
+            bottom: 16px;
+            left: 54px;
           }
           .ve-scene[data-theme="neon"] .ve-rider {
-            bottom: 20px;
-            left: 72px;
+            bottom: 12px;
+            left: 50px;
           }
           .ve-rider-shadow {
             position: absolute;
-            left: -2px;
-            right: 4px;
-            bottom: -2px;
-            height: 18px;
+            left: 10px;
+            right: 20px;
+            bottom: 1px;
+            height: 14px;
             border-radius: 999px;
             background: radial-gradient(
               ellipse at center,
@@ -849,7 +849,7 @@ def run_web_ui(
               rgba(2, 6, 23, 0) 74%
             );
             filter: blur(var(--ve-rider-shadow-blur));
-            transform: scaleX(0.92);
+            transform: scaleX(0.86);
             z-index: 0;
           }
           .ve-sprite {
@@ -870,24 +870,24 @@ def run_web_ui(
           }
           .ve-rider-glow {
             position: absolute;
-            inset: 8px 14px 6px 14px;
+            inset: 12px 20px 10px 18px;
             background: radial-gradient(
               ellipse at 42% 46%,
               rgba(255,255,255,0.12) 0%,
               rgba(255,255,255,0.05) 26%,
               rgba(255,255,255,0) 62%
             );
-            opacity: calc((var(--ve-scene-boost) - 0.86) * 0.9);
+            opacity: calc((var(--ve-scene-boost) - 0.9) * 0.55);
             mix-blend-mode: screen;
             pointer-events: none;
             z-index: 1;
           }
           .ve-rider-speedlines {
             position: absolute;
-            left: -34px;
-            top: 20px;
-            width: 68px;
-            height: 28px;
+            left: -20px;
+            top: 28px;
+            width: 36px;
+            height: 16px;
             opacity: var(--ve-rider-speed-opacity);
             background:
               repeating-linear-gradient(
@@ -896,40 +896,40 @@ def run_web_ui(
                 rgba(255,255,255,0.8) 4px 6px,
                 rgba(255,255,255,0) 6px 12px
               );
-            filter: blur(1px);
+            filter: blur(.8px);
             transform: skewX(-24deg);
             z-index: 1;
           }
           .ve-rider-dust {
             position: absolute;
-            left: 12px;
-            bottom: 8px;
-            width: 96px;
-            height: 22px;
+            left: 22px;
+            bottom: 6px;
+            width: 72px;
+            height: 16px;
             opacity: var(--ve-rider-dust-opacity);
             background:
               radial-gradient(circle at 18% 68%, rgba(226,232,240,0.85) 0 10%, rgba(226,232,240,0) 24%),
               radial-gradient(circle at 44% 54%, rgba(226,232,240,0.72) 0 8%, rgba(226,232,240,0) 22%),
               radial-gradient(circle at 72% 70%, rgba(226,232,240,0.55) 0 9%, rgba(226,232,240,0) 24%);
             filter: blur(1.5px);
-            transform: translateX(calc(var(--ve-rider-pulse) * -1px));
+            transform: translateX(calc(var(--ve-rider-pulse) * -0.5px));
             z-index: 1;
           }
           .ve-rider-occlusion {
             position: absolute;
-            left: 32px;
-            right: -8px;
-            bottom: 18px;
-            height: 18px;
+            left: 48px;
+            right: 12px;
+            bottom: 10px;
+            height: 12px;
             background: linear-gradient(
               180deg,
               rgba(0,0,0,0) 0%,
-              rgba(15, 23, 42, 0.14) 38%,
-              rgba(15, 23, 42, 0.42) 100%
+              rgba(15, 23, 42, 0.08) 42%,
+              rgba(15, 23, 42, 0.24) 100%
             );
             border-radius: 999px 999px 4px 4px;
             z-index: 3;
-            opacity: .72;
+            opacity: .58;
           }
           .ve-hud {
             position: absolute;
