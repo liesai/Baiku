@@ -419,6 +419,8 @@ def run_web_ui(
             --ve-rider-shadow-opacity: .26;
             --ve-rider-shadow-blur: 10px;
             --ve-rider-pulse: 0;
+            --ve-sprite-rock: 0deg;
+            --ve-sprite-lift: 0px;
             --ve-rider-dust-opacity: .18;
             --ve-rider-speed-opacity: .08;
             --ve-accent: rgba(56, 189, 248, 0.35);
@@ -860,7 +862,9 @@ def run_web_ui(
             background-position: 0% 0;
             transform:
               translateX(var(--ve-sprite-shift-x))
-              translateY(calc(var(--ve-rider-pulse) * -1px));
+              translateY(calc(var(--ve-rider-pulse) * -1px + var(--ve-sprite-lift)))
+              rotate(var(--ve-sprite-rock));
+            transform-origin: 42% 72%;
             filter: drop-shadow(0 2px 2px rgba(2, 6, 23, 0.45));
             z-index: 2;
           }
@@ -1047,9 +1051,13 @@ def run_web_ui(
               const frameMap = [0, 1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1];
               const frame = frameMap[framePhase];
               const x = frame * (100 / 6);
-              const shiftByFrame = [0, -1, -1, 0, 1, 1, 0, 1, 1, 0, -1, -1];
+              const shiftByFrame = [0, -1, -2, -1, 1, 2, 1, 2, 1, -1, -2, -1];
+              const rockByFrame = [-1.6, -1.0, -0.3, 0.6, 1.1, 1.7, 1.0, 1.7, 1.1, 0.6, -0.3, -1.0];
+              const liftByFrame = [0, -1, -2, -1, 0, 1, 2, 1, 0, -1, -2, -1];
               spriteNode.style.backgroundPosition = `${x}% 0%`;
               scene.style.setProperty('--ve-sprite-shift-x', `${shiftByFrame[framePhase]}px`);
+              scene.style.setProperty('--ve-sprite-rock', `${rockByFrame[framePhase]}deg`);
+              scene.style.setProperty('--ve-sprite-lift', `${liftByFrame[framePhase]}px`);
             }
             if (speedNode) speedNode.textContent = `${s.toFixed(1)} km/h`;
             if (actionNode) {
