@@ -65,6 +65,7 @@ NEON_PARALLAX_MID_URL = f"{ASSETS_ROUTE}/parallax/neon/mid.png"
 NEON_PARALLAX_FRONT_URL = f"{ASSETS_ROUTE}/parallax/neon/front.png"
 NEON_PARALLAX_CLOUDS_URL = f"{ASSETS_ROUTE}/parallax/neon/clouds.png"
 DMD_CYCLIST_URL = f"{ASSETS_ROUTE}/dmd_cyclist_bonus.png"
+THREE_MODULE_URL = f"{ASSETS_ROUTE}/vendor/three.module.js"
 _ASSETS_MOUNTED = False
 
 
@@ -258,7 +259,11 @@ def run_web_ui(
     }
     ui.add_head_html(
         """
-        <script src="https://unpkg.com/three@0.161.0/build/three.min.js"></script>
+        <script type="module">
+          import * as THREE from '__THREE_MODULE_URL__';
+          window.THREE = THREE;
+          window.dispatchEvent(new CustomEvent('velox-three-ready'));
+        </script>
         <style>
           :root {
             --gb-bg: #0b1220;
@@ -499,6 +504,34 @@ def run_web_ui(
             display: block;
             width: 100%;
             height: 100%;
+          }
+          .ve-three-debug {
+            position: absolute;
+            left: 10px;
+            top: 8px;
+            z-index: 9;
+            font-size: 0.62rem;
+            font-weight: 700;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+            color: #cbd5e1;
+            background: rgba(2, 6, 23, 0.58);
+            border: 1px solid rgba(148, 163, 184, 0.28);
+            border-radius: 999px;
+            padding: 2px 7px;
+            backdrop-filter: blur(4px);
+          }
+          .ve-three-debug.ok {
+            color: #a7f3d0;
+            border-color: rgba(45, 212, 191, 0.42);
+          }
+          .ve-three-debug.warn {
+            color: #fde68a;
+            border-color: rgba(251, 191, 36, 0.42);
+          }
+          .ve-three-debug.err {
+            color: #fca5a5;
+            border-color: rgba(248, 113, 113, 0.42);
           }
           .ve-scene[data-theme="neon"] .ve-three-layer {
             opacity: 1;
@@ -1028,13 +1061,21 @@ def run_web_ui(
           window.veloxEnsureThreeScene = function() {
             const mount = document.getElementById('ve-three-layer');
             const root = document.getElementById('ve-scene');
+            const debugNode = document.getElementById('ve-three-debug');
+            const setDebug = function(text, cls) {
+              if (!debugNode) return;
+              debugNode.textContent = text;
+              debugNode.className = `ve-three-debug ${cls || ''}`.trim();
+            };
             if (!mount || !root) return null;
             if (window.__velox_three_scene && window.__velox_three_scene.mount === mount) {
               root.dataset.threeReady = '1';
+              setDebug(`Three ${window.__velox_three_scene.glMode}`, 'ok');
               return window.__velox_three_scene;
             }
             if (!window.THREE) {
               root.dataset.threeReady = '0';
+              setDebug('Three script pending', 'warn');
               if (!window.__velox_three_retry) {
                 window.__velox_three_retry = window.setTimeout(() => {
                   window.__velox_three_retry = 0;
@@ -1046,16 +1087,61 @@ def run_web_ui(
             const T = window.THREE;
             mount.innerHTML = '<canvas class="ve-three-canvas"></canvas>';
             const canvas = mount.querySelector('canvas');
-            const renderer = new T.WebGLRenderer({
-              canvas,
-              antialias: true,
-              alpha: true,
-              powerPreference: 'high-performance',
-            });
+            let gl = null;
+            let glMode = 'fallback';
+            try {
+              gl = canvas.getContext('webgl2', {
+                alpha: true,
+                antialias: true,
+                powerPreference: 'high-performance',
+                premultipliedAlpha: true,
+              });
+              if (gl) glMode = 'webgl2';
+            } catch (err) {
+              gl = null;
+            }
+            if (!gl) {
+              try {
+                gl = canvas.getContext('webgl', {
+                  alpha: true,
+                  antialias: true,
+                  powerPreference: 'high-performance',
+                  premultipliedAlpha: true,
+                }) || canvas.getContext('experimental-webgl', {
+                  alpha: true,
+                  antialias: true,
+                  powerPreference: 'high-performance',
+                  premultipliedAlpha: true,
+                });
+                if (gl) glMode = 'webgl';
+              } catch (err) {
+                gl = null;
+              }
+            }
+            if (!gl) {
+              root.dataset.threeReady = '0';
+              setDebug('WebGL context failed', 'err');
+              return null;
+            }
+            let renderer = null;
+            try {
+              renderer = new T.WebGLRenderer({
+                canvas,
+                context: gl,
+                antialias: true,
+                alpha: true,
+                powerPreference: 'high-performance',
+              });
+            } catch (err) {
+              root.dataset.threeReady = '0';
+              setDebug(`Renderer failed (${glMode})`, 'err');
+              return null;
+            }
             if ('outputColorSpace' in renderer && T.SRGBColorSpace) {
               renderer.outputColorSpace = T.SRGBColorSpace;
             }
             renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+            setDebug(`Three ${glMode}`, 'ok');
 
             const scene3d = new T.Scene();
             scene3d.fog = new T.FogExp2(0x060b16, 0.06);
@@ -1555,7 +1641,7 @@ def run_web_ui(
             }
 
             render();
-            window.__velox_three_scene = { mount, renderer, scene3d, camera, rider, resize };
+            window.__velox_three_scene = { mount, renderer, scene3d, camera, rider, resize, glMode };
             return window.__velox_three_scene;
           };
           window.veloxUpdateScene = function(speed, cadence, power, inZone, action) {
@@ -1655,6 +1741,9 @@ def run_web_ui(
             if (window.veloxSetSceneTheme) window.veloxSetSceneTheme('neon');
             if (window.veloxEnsureThreeScene) window.veloxEnsureThreeScene();
           }, 0);
+          window.addEventListener('velox-three-ready', () => {
+            if (window.veloxEnsureThreeScene) window.veloxEnsureThreeScene();
+          });
           window.veloxPinballFx = function(kind, label) {
             const scene = document.getElementById('ve-scene');
             const fx = document.getElementById('ve-fx');
@@ -1962,6 +2051,7 @@ def run_web_ui(
           })();
         </script>
         """
+        .replace("__THREE_MODULE_URL__", THREE_MODULE_URL)
         .replace("__SPRITE_URL__", SPRITE_URL)
         .replace("__SCENE_BG_URL__", SCENE_BG_URL)
         .replace("__SCENE_BG_ALT_1_URL__", SCENE_BG_ALT_1_URL)
@@ -2333,6 +2423,7 @@ def run_web_ui(
                   <div class="ve-bg ve-bg-overlay"></div>
                   <div class="ve-road"></div>
                   <div id="ve-three-layer" class="ve-three-layer"></div>
+                  <div id="ve-three-debug" class="ve-three-debug warn">Three script pending</div>
                   <div id="ve-fx" class="ve-fx">BONUS!</div>
                   <div class="ve-hud">
                     <span id="ve-scene-theme-label" class="ve-scenery-badge">Neon night</span>
