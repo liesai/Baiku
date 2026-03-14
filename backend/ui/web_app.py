@@ -1249,8 +1249,9 @@ def run_web_ui(
 
             const cityTexture = makeCanvasTexture(320, 320, (ctx, w, h) => {
               const grad = ctx.createLinearGradient(0, 0, 0, h);
-              grad.addColorStop(0, '#61748f');
-              grad.addColorStop(1, '#34445c');
+              grad.addColorStop(0, '#6f84a3');
+              grad.addColorStop(0.55, '#455873');
+              grad.addColorStop(1, '#2c394c');
               ctx.fillStyle = grad;
               ctx.fillRect(0, 0, w, h);
               for (let x = 0; x < w; x += 32) {
@@ -1258,21 +1259,30 @@ def run_web_ui(
                 ctx.fillRect(x, 0, 2, h);
               }
               for (let y = 14; y < h - 10; y += 15) {
+                ctx.fillStyle = y % 30 === 0 ? 'rgba(255,255,255,0.04)' : 'rgba(10,18,30,0.05)';
+                ctx.fillRect(0, y - 1, w, 1);
                 for (let x = 10; x < w - 10; x += 18) {
-                  const r = (x * 17 + y * 13) % 11;
-                  if (r < 2) {
-                    ctx.fillStyle = 'rgba(72,92,118,0.24)';
+                  const r = (x * 17 + y * 13) % 17;
+                  if (r < 3) {
+                    ctx.fillStyle = 'rgba(72,92,118,0.22)';
                     ctx.fillRect(x, y, 8, 6);
+                  } else if (r < 11) {
+                    ctx.fillStyle = r % 2 === 0 ? 'rgba(255,232,165,0.92)' : 'rgba(255,249,214,0.76)';
+                    ctx.fillRect(x, y, 8, 6);
+                    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+                    ctx.fillRect(x + 1, y + 1, 6, 1);
+                    ctx.fillStyle = 'rgba(244,114,182,0.18)';
+                    ctx.fillRect(x, y + 6, 8, 1);
                   } else {
-                    ctx.fillStyle = r < 7 ? 'rgba(255,221,142,0.82)' : 'rgba(103,232,249,0.58)';
+                    ctx.fillStyle = r < 14 ? 'rgba(103,232,249,0.72)' : 'rgba(244,114,182,0.62)';
                     ctx.fillRect(x, y, 8, 6);
-                    ctx.fillStyle = r < 7 ? 'rgba(244,114,182,0.16)' : 'rgba(255,255,255,0.08)';
+                    ctx.fillStyle = 'rgba(255,255,255,0.1)';
                     ctx.fillRect(x, y + 6, 8, 1);
                   }
                 }
               }
               for (let i = 0; i < 9; i += 1) {
-                ctx.fillStyle = i % 2 === 0 ? 'rgba(244,114,182,0.08)' : 'rgba(34,211,238,0.06)';
+                ctx.fillStyle = i % 2 === 0 ? 'rgba(244,114,182,0.11)' : 'rgba(34,211,238,0.09)';
                 ctx.fillRect(0, 24 + i * 34, w, 2);
               }
             }, 1, 1);
@@ -1292,8 +1302,8 @@ def run_web_ui(
                   if (seed < 4) {
                     ctx.fillStyle = 'rgba(63,80,110,0.22)';
                     ctx.fillRect(x, y, 4, 3);
-                  } else if (seed < 12) {
-                    ctx.fillStyle = seed % 3 === 0 ? 'rgba(255,230,160,0.34)' : 'rgba(103,232,249,0.24)';
+                  } else if (seed < 15) {
+                    ctx.fillStyle = seed % 3 === 0 ? 'rgba(255,236,182,0.44)' : 'rgba(103,232,249,0.3)';
                     ctx.fillRect(x, y, 4, 3);
                   }
                 }
@@ -1337,6 +1347,30 @@ def run_web_ui(
                 );
                 crown.position.set(x, y + h + 0.12, z);
                 tower.add(crown);
+              }
+              if (Math.random() > 0.42) {
+                const lightBand = new T.Mesh(
+                  new T.PlaneGeometry(w * (0.38 + Math.random() * 0.28), 0.08 + Math.random() * 0.06),
+                  new T.MeshBasicMaterial({
+                    color: Math.random() > 0.5 ? 0x67e8f9 : 0xf9a8d4,
+                    transparent: true,
+                    opacity: 0.4,
+                  }),
+                );
+                lightBand.position.set(x, y + h * (0.55 + Math.random() * 0.28), z + d / 2 + 0.02);
+                tower.add(lightBand);
+              }
+              if (Math.random() > 0.58) {
+                const facadeGlow = new T.Mesh(
+                  new T.PlaneGeometry(w * 0.72, h * (0.18 + Math.random() * 0.16)),
+                  new T.MeshBasicMaterial({
+                    color: Math.random() > 0.55 ? 0xfff1b5 : 0x7dd3fc,
+                    transparent: true,
+                    opacity: 0.08,
+                  }),
+                );
+                facadeGlow.position.set(x, y + h * (0.42 + Math.random() * 0.22), z + d / 2 + 0.01);
+                tower.add(facadeGlow);
               }
               if (Math.random() > 0.68) {
                 const beacon = new T.Mesh(
