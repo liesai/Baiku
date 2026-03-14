@@ -39,6 +39,10 @@ class WorkoutProgress:
 ProgressCallback = Callable[[WorkoutProgress], None]
 FinishCallback = Callable[[bool], None]
 
+_STARTUP_ERG_RAMP_SECONDS = 8
+_STARTUP_ERG_MIN_WATTS = 90
+_STARTUP_ERG_RATIO = 0.55
+
 
 class WorkoutRunner:
     def __init__(self, client: FTMSClient) -> None:
@@ -90,11 +94,13 @@ class WorkoutRunner:
                 if self._stop_event.is_set():
                     break
                 next_step = plan.steps[index] if index < len(plan.steps) else None
+                startup_soft_ramp = target_mode == "erg" and index == 1
 
                 target_value, target_unit = await self._apply_step_target(
                     step,
                     target_mode=target_mode,
                     ftp_watts=ftp_watts,
+                    soft_start=startup_soft_ramp,
                 )
                 await self._countdown_step(
                     step=step,
@@ -107,6 +113,7 @@ class WorkoutRunner:
                     elapsed_offset_sec=elapsed_offset,
                     total_duration_sec=plan.total_duration_sec,
                     on_progress=on_progress,
+                    startup_soft_ramp=startup_soft_ramp,
                 )
                 elapsed_offset += step.duration_sec
 
@@ -120,14 +127,20 @@ class WorkoutRunner:
         *,
         target_mode: TargetMode,
         ftp_watts: int,
+        soft_start: bool = False,
     ) -> tuple[float, str]:
         attempts = 0
         last_exc: Exception | None = None
+        erg_target = (
+            _startup_erg_initial_target(step.target_watts)
+            if target_mode == "erg" and soft_start
+            else step.target_watts
+        )
         while attempts < 3 and not self._stop_event.is_set():
             attempts += 1
             try:
                 if target_mode == "erg":
-                    applied_watts = await self._client.set_target_power(step.target_watts)
+                    applied_watts = await self._client.set_target_power(erg_target)
                     return float(applied_watts), "W"
                 if target_mode == "resistance":
                     level = _watts_to_resistance(step.target_watts, ftp_watts)
@@ -144,10 +157,10 @@ class WorkoutRunner:
             if target_mode == "erg":
                 # Keep workout running even if ERG write fails transiently.
                 # The next steps/attempts may succeed once the trainer is fully ready.
-                return float(step.target_watts), "W"
+                return float(erg_target), "W"
             raise RuntimeError(f"Unable to apply {target_mode} target") from last_exc
         if target_mode == "erg":
-            return float(step.target_watts), "W"
+            return float(erg_target), "W"
         raise RuntimeError(f"Unable to apply {target_mode} target")
 
     async def _countdown_step(
@@ -163,16 +176,35 @@ class WorkoutRunner:
         elapsed_offset_sec: int,
         total_duration_sec: int,
         on_progress: ProgressCallback,
+        startup_soft_ramp: bool = False,
     ) -> None:
         label = step.label or f"Step {step_index}"
         next_label = None
         if next_step is not None:
             next_label = next_step.label or f"Step {step_index + 1}"
+        ramp_duration = 0
+        ramp_start = step.target_watts
+        if startup_soft_ramp and target_mode == "erg" and step.duration_sec > 1:
+            ramp_duration = min(_STARTUP_ERG_RAMP_SECONDS, step.duration_sec - 1)
+            ramp_start = _startup_erg_initial_target(step.target_watts)
+        last_ramp_target: int | None = None
         for remaining in range(step.duration_sec, 0, -1):
             if self._stop_event.is_set():
                 return
             step_elapsed = (step.duration_sec - remaining) + 1
             elapsed_total = elapsed_offset_sec + step_elapsed
+            current_target_watts = step.target_watts
+            if ramp_duration > 0 and step_elapsed <= ramp_duration:
+                progress_ratio = (step_elapsed - 1) / max(1, ramp_duration - 1)
+                current_target_watts = int(
+                    round(ramp_start + ((step.target_watts - ramp_start) * progress_ratio))
+                )
+                if current_target_watts != last_ramp_target:
+                    try:
+                        await self._client.set_target_power(current_target_watts)
+                        last_ramp_target = current_target_watts
+                    except Exception:  # pragma: no cover - BLE runtime variability
+                        last_ramp_target = current_target_watts
             transition_countdown_sec: int | None = None
             transition_label: str | None = None
             if next_label is not None and remaining <= 3:
@@ -189,12 +221,16 @@ class WorkoutRunner:
                     step_label=label,
                     transition_label=transition_label,
                     transition_countdown_sec=transition_countdown_sec,
-                    target_watts=step.target_watts,
+                    target_watts=current_target_watts,
                     target_mode=target_mode,
-                    target_display_value=target_value,
+                    target_display_value=(
+                        float(current_target_watts)
+                        if target_mode == "erg"
+                        else target_value
+                    ),
                     target_display_unit=target_unit,
-                    expected_power_min_watts=_expected_power_min(step.target_watts),
-                    expected_power_max_watts=_expected_power_max(step.target_watts),
+                    expected_power_min_watts=_expected_power_min(current_target_watts),
+                    expected_power_max_watts=_expected_power_max(current_target_watts),
                     expected_cadence_min_rpm=step.cadence_min_rpm,
                     expected_cadence_max_rpm=step.cadence_max_rpm,
                     step_duration_sec=step.duration_sec,
@@ -224,3 +260,8 @@ def _expected_power_min(target_watts: int) -> int:
 
 def _expected_power_max(target_watts: int) -> int:
     return max(1, int(round(target_watts * 1.05)))
+
+
+def _startup_erg_initial_target(target_watts: int) -> int:
+    softened = int(round(target_watts * _STARTUP_ERG_RATIO))
+    return max(_STARTUP_ERG_MIN_WATTS, min(target_watts, softened))
