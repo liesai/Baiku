@@ -1610,15 +1610,25 @@ def run_web_ui(
               const dx = bx - ax;
               const dy = by - ay;
               const dist = Math.max(0.001, Math.min(lenA + lenB - 0.02, Math.hypot(dx, dy)));
-              const mx = (ax + bx) / 2;
-              const my = (ay + by) / 2;
-              const h = Math.sqrt(Math.max(0.001, lenA * lenA - ((dist * dist + lenA * lenA - lenB * lenB) / (2 * dist)) ** 2));
+              const reach = (lenA * lenA - lenB * lenB + dist * dist) / (2 * dist);
+              const h = Math.sqrt(Math.max(0.001, lenA * lenA - reach ** 2));
               const nx = -dy / dist;
               const ny = dx / dist;
-              const a = (lenA * lenA - lenB * lenB + dist * dist) / (2 * dist);
               return {
-                x: ax + (dx * a) / dist + nx * h * bendSign,
-                y: ay + (dy * a) / dist + ny * h * bendSign,
+                x: ax + (dx * reach) / dist + nx * h * bendSign,
+                y: ay + (dy * reach) / dist + ny * h * bendSign,
+              };
+            }
+
+            function bendJointPreferred(ax, ay, bx, by, lenA, lenB, preferredX, preferredY, preferredSign) {
+              const c1 = bendJoint(ax, ay, bx, by, lenA, lenB, preferredSign || 1);
+              const c2 = bendJoint(ax, ay, bx, by, lenA, lenB, -(preferredSign || 1));
+              const d1 = ((c1.x - preferredX) ** 2) + ((c1.y - preferredY) ** 2);
+              const d2 = ((c2.x - preferredX) ** 2) + ((c2.y - preferredY) ** 2);
+              const best = d1 <= d2 ? c1 : c2;
+              return {
+                x: best.x < ax - 0.02 ? (ax - 0.02 + best.x) * 0.5 : best.x,
+                y: best.y,
               };
             }
 
@@ -1728,8 +1738,28 @@ def run_web_ui(
                 const handFront = { x: 1.88, y: 1.48 };
                 const pedalFront = { x: 0.02 + Math.cos(pedalAngle) * 0.53, y: 0.08 + Math.sin(pedalAngle) * 0.53 };
                 const pedalRear = { x: 0.02 + Math.cos(pedalAngle + Math.PI) * 0.53, y: 0.08 + Math.sin(pedalAngle + Math.PI) * 0.53 };
-                const kneeFront = bendJoint(hipFront.x, hipFront.y, pedalFront.x, pedalFront.y, 0.84, 0.86, -1);
-                const kneeRear = bendJoint(hipRear.x, hipRear.y, pedalRear.x, pedalRear.y, 0.86, 0.84, 1);
+                const kneeFront = bendJointPreferred(
+                  hipFront.x,
+                  hipFront.y,
+                  pedalFront.x,
+                  pedalFront.y,
+                  0.84,
+                  0.86,
+                  hipFront.x + 0.42,
+                  hipFront.y + 0.16,
+                  -1,
+                );
+                const kneeRear = bendJointPreferred(
+                  hipRear.x,
+                  hipRear.y,
+                  pedalRear.x,
+                  pedalRear.y,
+                  0.86,
+                  0.84,
+                  hipRear.x + 0.36,
+                  hipRear.y + 0.08,
+                  1,
+                );
                 const elbowFront = bendJoint(shoulderFront.x, shoulderFront.y, handFront.x, handFront.y, 0.58, 0.52, -1);
                 const elbowRear = bendJoint(shoulderRear.x, shoulderRear.y, handRear.x, handRear.y, 0.48, 0.5, 1);
 
