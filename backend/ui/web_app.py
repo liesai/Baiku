@@ -505,6 +505,24 @@ def run_web_ui(
             width: 100%;
             height: 100%;
           }
+          .ve-three-edge-fade {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 8%;
+            z-index: 7;
+            pointer-events: none;
+          }
+          .ve-three-edge-fade.left {
+            left: 0;
+            background:
+              linear-gradient(90deg, rgba(3,7,18,.95) 0%, rgba(3,7,18,.58) 34%, rgba(3,7,18,0) 100%);
+          }
+          .ve-three-edge-fade.right {
+            right: 0;
+            background:
+              linear-gradient(270deg, rgba(3,7,18,.95) 0%, rgba(3,7,18,.58) 34%, rgba(3,7,18,0) 100%);
+          }
           .ve-three-debug {
             position: absolute;
             left: 10px;
@@ -1339,28 +1357,28 @@ def run_web_ui(
             const roadMat = makeMat(0x101828, 0x164e63, 0.16, 1);
             roadMat.map = roadTexture;
             const road = new T.Mesh(
-              new T.BoxGeometry(46, 1.9, 4.8),
+              new T.BoxGeometry(96, 1.9, 4.8),
               roadMat,
             );
             road.position.set(0, -4.05, 0.2);
             bridge.add(road);
 
             const curb = new T.Mesh(
-              new T.BoxGeometry(46, 0.18, 5.0),
+              new T.BoxGeometry(96, 0.18, 5.0),
               makeMat(0x67e8f9, 0x22d3ee, 1.1, 0.96),
             );
             curb.position.set(0, -3.08, 0.5);
             bridge.add(curb);
 
             const roadGlow = new T.Mesh(
-              new T.PlaneGeometry(42, 1.7),
+              new T.PlaneGeometry(88, 1.7),
               makeMat(0x0f172a, 0xf472b6, 0.14, 0.16),
             );
             roadGlow.position.set(0, -3.12, 0.78);
             roadGlow.rotation.x = -Math.PI / 2;
             bridge.add(roadGlow);
 
-            for (let i = 0; i < 24; i += 1) {
+            for (let i = 0; i < 46; i += 1) {
               const post = new T.Mesh(
                 new T.BoxGeometry(0.2, 2.4 + (i % 3) * 0.12, 0.28),
                 makeMat(0x155e75, 0x2dd4bf, 0.34, 0.9),
@@ -1373,12 +1391,12 @@ def run_web_ui(
               group.add(post, cap);
               post.position.y = -2.18;
               cap.position.y = -0.92;
-              group.position.set(-19.8 + i * 1.78, 0, 1.6);
+              group.position.set(-40 + i * 1.78, 0, 1.6);
               bridge.add(group);
               railPosts.push({ group, baseX: group.position.x });
             }
 
-            for (let i = 0; i < 4; i += 1) {
+            for (let i = 0; i < 6; i += 1) {
               const pole = new T.Group();
               const mast = new T.Mesh(
                 new T.CylinderGeometry(0.05, 0.05, 5.8, 8),
@@ -1401,17 +1419,17 @@ def run_web_ui(
               );
               halo.position.copy(lamp.position);
               pole.add(mast, arm, lamp, halo);
-              pole.position.set(-14 + i * 9.8, 0, 1.05);
+              pole.position.set(-24 + i * 9.8, 0, 1.05);
               bridge.add(pole);
               poles.push({ pole, lamp, halo, baseX: pole.position.x });
             }
 
-            for (let i = 0; i < 18; i += 1) {
+            for (let i = 0; i < 34; i += 1) {
               const mark = new T.Mesh(
                 new T.BoxGeometry(1.1, 0.03, 0.2),
                 makeMat(0x93c5fd, 0x67e8f9, 0.92, 0.95),
               );
-              mark.position.set(-16 + i * 2.15, -3.02, -0.05);
+              mark.position.set(-35 + i * 2.15, -3.02, -0.05);
               bridge.add(mark);
               laneMarks.push({ mark, baseX: mark.position.x });
             }
@@ -1447,6 +1465,12 @@ def run_web_ui(
             riderShadow.rotation.x = -Math.PI / 2;
             riderShadow.position.set(0, -0.98, 0.45);
             rider.add(riderShadow);
+            const riderAura = new T.Mesh(
+              new T.CircleGeometry(2.2, 28),
+              new T.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.045 }),
+            );
+            riderAura.position.set(0.1, 0.7, -0.18);
+            rider.add(riderAura);
 
             const tireMat = makeMat(0x111827, 0x0f172a, 0.12, 1);
             const rimMat = makeMat(0x60a5fa, 0x38bdf8, 0.52, 1);
@@ -1485,11 +1509,11 @@ def run_web_ui(
 
             function makeWheel(x, z) {
               const g = new T.Group();
-              const tire = new T.Mesh(new T.TorusGeometry(1.02, 0.1, 10, 32), tireMat);
-              const rim = new T.Mesh(new T.TorusGeometry(0.84, 0.04, 8, 28), rimMat);
+              const tire = new T.Mesh(new T.TorusGeometry(0.98, 0.08, 10, 32), tireMat);
+              const rim = new T.Mesh(new T.TorusGeometry(0.82, 0.035, 8, 28), rimMat);
               const hub = new T.Mesh(new T.CircleGeometry(0.12, 16), rimMat);
-              const spokeA = new T.Mesh(new T.BoxGeometry(0.06, 1.52, 0.03), spokeMat);
-              const spokeB = new T.Mesh(new T.BoxGeometry(1.52, 0.06, 0.03), spokeMat);
+              const spokeA = new T.Mesh(new T.BoxGeometry(0.045, 1.46, 0.03), spokeMat);
+              const spokeB = new T.Mesh(new T.BoxGeometry(1.46, 0.045, 0.03), spokeMat);
               const spokeC = spokeA.clone();
               spokeC.rotation.z = Math.PI / 4;
               const spokeD = spokeA.clone();
@@ -1650,21 +1674,21 @@ def run_web_ui(
                 const midOffset = -state.speed * 0.0042 * state.tick * 60;
                 const nearOffset = -state.speed * 0.017 * state.tick * 60;
                 farBuildings.forEach((item, idx) => {
-                  item.mesh.position.x = wrapX(item.baseX, farOffset + idx * 0.02, 20);
+                  item.mesh.position.x = wrapX(item.baseX, farOffset + idx * 0.02, 28);
                   item.mesh.material.emissiveIntensity = 0.55 + Math.sin(state.tick * item.pulse + idx) * 0.1;
                 });
                 midBuildings.forEach((item, idx) => {
-                  item.mesh.position.x = wrapX(item.baseX, midOffset + idx * 0.04, 20);
+                  item.mesh.position.x = wrapX(item.baseX, midOffset + idx * 0.04, 28);
                   item.mesh.material.emissiveIntensity = 0.7 + Math.sin(state.tick * (item.pulse + 0.2) + idx) * 0.14;
                 });
                 railPosts.forEach((item) => {
-                  item.group.position.x = wrapX(item.baseX, nearOffset, 22);
+                  item.group.position.x = wrapX(item.baseX, nearOffset, 44);
                 });
                 laneMarks.forEach((item) => {
-                  item.mark.position.x = wrapX(item.baseX, nearOffset * 1.15, 18);
+                  item.mark.position.x = wrapX(item.baseX, nearOffset * 1.15, 38);
                 });
                 poles.forEach((item, idx) => {
-                  item.pole.position.x = wrapX(item.baseX, nearOffset * 0.92, 20);
+                  item.pole.position.x = wrapX(item.baseX, nearOffset * 0.92, 32);
                   const boost = state.intensity === 'high' ? 1.45 : state.intensity === 'low' ? 0.88 : 1.12;
                   item.lamp.material.emissiveIntensity = 2.4 * boost;
                   item.halo.material.opacity = 0.15 * boost;
@@ -2534,6 +2558,8 @@ def run_web_ui(
                   <div class="ve-bg ve-bg-overlay"></div>
                   <div class="ve-road"></div>
                   <div id="ve-three-layer" class="ve-three-layer"></div>
+                  <div class="ve-three-edge-fade left"></div>
+                  <div class="ve-three-edge-fade right"></div>
                   <div id="ve-three-debug" class="ve-three-debug warn">Three script pending</div>
                   <div id="ve-fx" class="ve-fx">BONUS!</div>
                   <div class="ve-hud">
