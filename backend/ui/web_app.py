@@ -478,8 +478,8 @@ def run_web_ui(
           }
           .ve-scene[data-theme="neon"] {
             background:
-              radial-gradient(circle at top center, rgba(244, 114, 182, 0.18) 0%, rgba(0, 0, 0, 0) 34%),
-              linear-gradient(180deg, #020617 0%, #071229 46%, #050816 100%);
+              radial-gradient(circle at 50% -8%, rgba(244, 114, 182, 0.16) 0%, rgba(244, 114, 182, 0) 28%),
+              linear-gradient(180deg, #030712 0%, #071426 24%, #0b1b35 58%, #050816 100%);
             --ve-accent: rgba(167, 139, 250, 0.4);
             --ve-glow: rgba(244, 114, 182, 0.18);
             --ve-road-line: rgba(45, 212, 191, 0.9);
@@ -599,49 +599,97 @@ def run_web_ui(
           .ve-scene[data-theme="neon"] .ve-bg-sky {
             background:
               url('__NEON_PARALLAX_STARS_URL__'),
-              linear-gradient(180deg, rgba(15,23,42,0.22) 0%, rgba(255,255,255,0) 46%);
+              radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.1) 0%, rgba(56, 189, 248, 0) 26%),
+              linear-gradient(180deg, rgba(8,15,32,0.2) 0%, rgba(255,255,255,0) 46%);
             background-repeat: repeat-x, no-repeat;
-            background-size: auto 100%, 100% 100%;
-            background-position: center, center;
+            background-size: auto 100%, 100% 100%, 100% 100%;
+            background-position: center, center, center;
+            opacity: .9;
           }
           .ve-scene[data-theme="neon"] .ve-bg-far {
-            top: 18px;
-            bottom: 18px;
+            top: 12px;
+            bottom: 26px;
             background-image: url('__NEON_PARALLAX_CLOUDS_URL__');
-            background-size: auto 128%;
+            background-size: auto 164%;
             background-position: var(--ve-bg-far-offset) center;
             background-repeat: repeat-x;
-            opacity: calc(.32 * var(--ve-scene-boost));
-            filter: hue-rotate(25deg) saturate(1.3);
+            opacity: calc(.18 * var(--ve-scene-boost));
+            filter: hue-rotate(22deg) saturate(.9) blur(1.3px);
           }
           .ve-scene[data-theme="neon"] .ve-bg-mid {
-            top: 24px;
-            bottom: 14px;
+            top: 30px;
+            bottom: 18px;
             background-image: url('__NEON_PARALLAX_BACK_URL__');
-            background-size: auto 138%;
+            background-size: auto 166%;
             background-position: var(--ve-bg-mid-offset) bottom;
             background-repeat: repeat-x;
-            opacity: .84;
-            filter: hue-rotate(18deg) saturate(calc(1.18 * var(--ve-scene-boost)));
+            opacity: .7;
+            filter:
+              hue-rotate(18deg)
+              saturate(calc(1.12 * var(--ve-scene-boost)))
+              brightness(.88)
+              blur(.45px);
           }
           .ve-scene[data-theme="neon"] .ve-bg-front {
             top: auto;
-            bottom: 16px;
-            height: 120px;
+            bottom: 18px;
+            height: 126px;
             background-image:
               url('__NEON_PARALLAX_FRONT_URL__'),
               url('__NEON_PARALLAX_MID_URL__');
-            background-size: auto 136%, auto 124%;
+            background-size: auto 158%, auto 142%;
             background-position: var(--ve-bg-front-offset) bottom, calc(var(--ve-bg-front-offset) * 0.72) bottom;
             background-repeat: repeat-x, repeat-x;
-            opacity: calc(.82 * var(--ve-scene-boost));
-            filter: saturate(1.26);
+            opacity: calc(.88 * var(--ve-scene-boost));
+            filter: saturate(1.18) brightness(1.02);
             mix-blend-mode: screen;
+            overflow: hidden;
+          }
+          .ve-scene[data-theme="neon"] .ve-bg-front::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background:
+              repeating-linear-gradient(
+                90deg,
+                rgba(45,212,191,0) 0 144px,
+                rgba(45,212,191,.84) 144px 150px,
+                rgba(103,232,249,.94) 150px 154px,
+                rgba(45,212,191,0) 154px 260px
+              ),
+              repeating-linear-gradient(
+                90deg,
+                rgba(251,191,36,0) 0 156px,
+                rgba(251,191,36,.44) 156px 160px,
+                rgba(251,191,36,0) 160px 266px
+              );
+            background-position: var(--ve-bg-front-offset) bottom, calc(var(--ve-bg-front-offset) * 1.2) bottom;
+            opacity: .42;
+            mix-blend-mode: screen;
+          }
+          .ve-scene[data-theme="neon"] .ve-bg-front::after {
+            content: "";
+            position: absolute;
+            left: -8%;
+            right: -8%;
+            bottom: -1px;
+            height: 18px;
+            background:
+              linear-gradient(180deg, rgba(45,212,191,0.24) 0%, rgba(45,212,191,0.06) 26%, rgba(0,0,0,0) 28%),
+              repeating-linear-gradient(
+                90deg,
+                rgba(255,255,255,0) 0 30px,
+                rgba(148,163,184,.2) 30px 32px,
+                rgba(255,255,255,0) 32px 38px
+              );
+            opacity: .45;
           }
           .ve-scene[data-theme="neon"] .ve-bg-overlay {
             background:
-              linear-gradient(180deg, rgba(244,114,182,0.04) 0%, rgba(34,211,238,0) 48%),
-              radial-gradient(circle at 52% 30%, rgba(34,211,238,0.18) 0%, rgba(34,211,238,0) 34%);
+              radial-gradient(circle at 50% 100%, rgba(56, 189, 248, 0.14) 0%, rgba(56, 189, 248, 0) 42%),
+              linear-gradient(180deg, rgba(244,114,182,0.05) 0%, rgba(34,211,238,0) 48%),
+              radial-gradient(circle at 52% 30%, rgba(34,211,238,0.2) 0%, rgba(34,211,238,0) 34%),
+              linear-gradient(180deg, rgba(2,6,23,0) 62%, rgba(2,6,23,.22) 100%);
             opacity: var(--ve-overlay-opacity);
           }
           .ve-road {
@@ -685,8 +733,64 @@ def run_web_ui(
           }
           .ve-scene[data-theme="neon"] .ve-road {
             background:
-              linear-gradient(180deg, rgba(45,212,191,0.08) 0%, rgba(15,23,42,0) 20%),
-              linear-gradient(180deg, rgba(2,6,23,0.1) 0%, rgba(2,6,23,0.85) 100%);
+              linear-gradient(180deg, rgba(45,212,191,0.12) 0%, rgba(15,23,42,0) 20%),
+              linear-gradient(180deg, rgba(15,23,42,0.04) 0%, rgba(2,6,23,0.82) 100%);
+          }
+          .ve-scene[data-theme="neon"] .ve-road::before {
+            background:
+              repeating-linear-gradient(
+                90deg,
+                rgba(255,255,255,0) 0 36px,
+                rgba(94,234,212,.95) 36px 58px,
+                rgba(255,255,255,0) 58px 110px
+              ),
+              repeating-linear-gradient(
+                90deg,
+                rgba(255,255,255,0) 0 120px,
+                rgba(251,191,36,.22) 120px 124px,
+                rgba(255,255,255,0) 124px 240px
+              );
+            background-position-x: var(--ve-road-offset), calc(var(--ve-road-offset) * 1.18);
+            background-position-y: 0, 0;
+            opacity: .68;
+            box-shadow: inset 0 -10px 18px rgba(2,6,23,.4);
+          }
+          .ve-scene[data-theme="neon"] .ve-road::after {
+            background:
+              linear-gradient(180deg, rgba(125,211,252,.1) 0%, rgba(15,23,42,0) 18%),
+              linear-gradient(180deg, rgba(15,23,42,0) 0%, rgba(2,6,23,.7) 100%);
+          }
+          .ve-scene[data-theme="neon"] .ve-rider-speedlines {
+            background:
+              repeating-linear-gradient(
+                180deg,
+                rgba(255,255,255,0) 0 4px,
+                rgba(103,232,249,0.92) 4px 6px,
+                rgba(255,255,255,0) 6px 12px
+              );
+          }
+          .ve-scene[data-theme="neon"]::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background:
+              linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(71,85,105,.08) 58%, rgba(2,6,23,.2) 100%),
+              radial-gradient(circle at 50% 54%, rgba(34,211,238,0) 0 44%, rgba(2,6,23,.24) 100%);
+            z-index: 6;
+          }
+          .ve-scene[data-theme="neon"]::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            pointer-events: none;
+            background:
+              radial-gradient(circle at 10% 50%, rgba(2,6,23,.34) 0%, rgba(2,6,23,0) 24%),
+              radial-gradient(circle at 90% 50%, rgba(2,6,23,.34) 0%, rgba(2,6,23,0) 24%);
+            z-index: 6;
           }
           .ve-scene[data-theme="alpine"] .ve-road {
             background:
