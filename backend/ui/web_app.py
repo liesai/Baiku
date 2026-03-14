@@ -1144,20 +1144,23 @@ def run_web_ui(
             setDebug(`Three ${glMode}`, 'ok');
 
             const scene3d = new T.Scene();
-            scene3d.fog = new T.FogExp2(0x060b16, 0.06);
+            scene3d.fog = new T.FogExp2(0x060b16, 0.045);
 
-            const camera = new T.PerspectiveCamera(34, 1, 0.1, 120);
-            camera.position.set(0, 1.3, 15);
-            camera.lookAt(0, 0.4, 0);
+            const camera = new T.PerspectiveCamera(28, 1, 0.1, 120);
+            camera.position.set(-1.8, 0.75, 11.8);
+            camera.lookAt(1.6, -0.2, 0);
 
-            const ambient = new T.HemisphereLight(0x8dd3ff, 0x07101c, 1.55);
+            const ambient = new T.HemisphereLight(0xa5d8ff, 0x07101c, 1.7);
             scene3d.add(ambient);
-            const key = new T.PointLight(0x5eead4, 12, 40, 2);
-            key.position.set(0, 2.5, 8);
+            const key = new T.PointLight(0x67e8f9, 16, 44, 2);
+            key.position.set(-0.5, 1.8, 7);
             scene3d.add(key);
-            const rim = new T.PointLight(0xf472b6, 8, 30, 2);
-            rim.position.set(-6, 3, 6);
+            const rim = new T.PointLight(0xf472b6, 12, 34, 2);
+            rim.position.set(-5.5, 2.4, 6);
             scene3d.add(rim);
+            const fill = new T.PointLight(0xfbbf24, 7, 28, 2);
+            fill.position.set(5.5, -0.5, 6);
+            scene3d.add(fill);
 
             const cityFar = new T.Group();
             const cityMid = new T.Group();
@@ -1207,105 +1210,113 @@ def run_web_ui(
               store.push({ mesh, baseX: x, baseY: y + h / 2, pulse: 0.6 + Math.random() * 0.8 });
             }
 
-            for (let i = 0; i < 26; i += 1) {
-              const x = -18 + i * 1.45;
+            for (let i = 0; i < 38; i += 1) {
+              const x = -24 + i * 1.18;
               addBuilding(
                 cityFar,
                 farBuildings,
                 x,
-                -2.5,
-                -9.5 + Math.random() * 1.5,
-                0.8 + Math.random() * 0.8,
-                1.2 + Math.random() * 3.4,
-                0.5 + Math.random() * 0.9,
-                0x41527c,
+                -2.9,
+                -10.8 + Math.random() * 1.8,
+                0.7 + Math.random() * 0.7,
+                1.8 + Math.random() * 4.8,
+                0.45 + Math.random() * 0.8,
+                0x31415f,
                 i % 3 === 0 ? 0xa855f7 : 0x38bdf8,
-                0.45,
+                0.34,
               );
             }
-            for (let i = 0; i < 18; i += 1) {
-              const x = -18 + i * 2.15;
+            for (let i = 0; i < 28; i += 1) {
+              const x = -23 + i * 1.62;
               addBuilding(
                 cityMid,
                 midBuildings,
                 x,
-                -2.6,
-                -5.4 + Math.random() * 1.2,
-                1.1 + Math.random() * 1.2,
-                2.2 + Math.random() * 4.8,
-                0.9 + Math.random() * 1.2,
-                0x60739f,
+                -3.05,
+                -6.8 + Math.random() * 1.4,
+                0.9 + Math.random() * 1.6,
+                3.4 + Math.random() * 6.8,
+                0.8 + Math.random() * 1.4,
+                0x556885,
                 i % 2 === 0 ? 0xf472b6 : 0x2dd4bf,
-                0.72,
+                0.82,
               );
             }
 
             const road = new T.Mesh(
-              new T.BoxGeometry(42, 1.7, 3.8),
-              makeMat(0x101828, 0x0f172a, 0.12, 1),
+              new T.BoxGeometry(52, 2.1, 5.6),
+              makeMat(0x101828, 0x164e63, 0.16, 1),
             );
-            road.position.set(0, -4.15, 0.3);
+            road.position.set(0, -4.15, 0.65);
             bridge.add(road);
 
             const curb = new T.Mesh(
-              new T.BoxGeometry(42, 0.18, 4),
-              makeMat(0x67e8f9, 0x22d3ee, 0.75, 0.95),
+              new T.BoxGeometry(52, 0.2, 5.9),
+              makeMat(0x67e8f9, 0x22d3ee, 1.1, 0.96),
             );
-            curb.position.set(0, -3.25, 0.35);
+            curb.position.set(0, -3.08, 0.72);
             bridge.add(curb);
 
-            for (let i = 0; i < 22; i += 1) {
+            const roadGlow = new T.Mesh(
+              new T.PlaneGeometry(48, 2.6),
+              makeMat(0x0f172a, 0xf472b6, 0.14, 0.16),
+            );
+            roadGlow.position.set(0, -3.26, 1.22);
+            roadGlow.rotation.x = -Math.PI / 2;
+            bridge.add(roadGlow);
+
+            for (let i = 0; i < 28; i += 1) {
               const post = new T.Mesh(
-                new T.BoxGeometry(0.28, 2.3 + (i % 2) * 0.25, 0.42),
-                makeMat(0x155e75, 0x2dd4bf, 0.22, 0.96),
+                new T.BoxGeometry(0.24, 2.65 + (i % 3) * 0.15, 0.34),
+                makeMat(0x155e75, 0x2dd4bf, 0.42, 0.96),
               );
               const cap = new T.Mesh(
-                new T.BoxGeometry(0.38, 0.12, 0.56),
-                makeMat(0x67e8f9, 0x67e8f9, 0.5, 0.96),
+                new T.BoxGeometry(0.34, 0.1, 0.48),
+                makeMat(0x67e8f9, 0x67e8f9, 0.7, 0.96),
               );
               const group = new T.Group();
               group.add(post, cap);
-              post.position.y = -2.35;
-              cap.position.y = -1.15;
-              group.position.set(-20 + i * 1.95, 0, 1.85);
+              post.position.y = -2.12;
+              cap.position.y = -0.78;
+              group.position.set(-24 + i * 1.8, 0, 2.65);
               bridge.add(group);
               railPosts.push({ group, baseX: group.position.x });
             }
 
-            for (let i = 0; i < 3; i += 1) {
+            for (let i = 0; i < 4; i += 1) {
               const pole = new T.Group();
               const mast = new T.Mesh(
-                new T.CylinderGeometry(0.05, 0.05, 4.8, 8),
-                makeMat(0x94a3b8, 0x1e293b, 0.2, 0.9),
+                new T.CylinderGeometry(0.05, 0.05, 5.8, 8),
+                makeMat(0x94a3b8, 0x1e293b, 0.22, 0.92),
               );
-              mast.position.y = -0.35;
+              mast.position.y = -0.1;
               const arm = new T.Mesh(
-                new T.BoxGeometry(0.9, 0.06, 0.06),
-                makeMat(0x94a3b8, 0x1e293b, 0.18, 0.95),
+                new T.BoxGeometry(1.2, 0.06, 0.06),
+                makeMat(0x94a3b8, 0x1e293b, 0.2, 0.95),
               );
-              arm.position.set(0.38, 1.95, 0);
+              arm.position.set(0.5, 2.45, 0);
               const lamp = new T.Mesh(
-                new T.SphereGeometry(0.15, 12, 12),
-                makeMat(0xfffbeb, 0xfff3b0, 3.2, 0.92),
+                new T.SphereGeometry(0.17, 12, 12),
+                makeMat(0xfffbeb, 0xfff3b0, 4.2, 0.94),
               );
-              lamp.position.set(0.72, 1.85, 0);
+              lamp.position.set(0.98, 2.3, 0);
               const halo = new T.Mesh(
-                new T.SphereGeometry(0.45, 16, 16),
-                makeMat(0xfff7cc, 0xfff7cc, 0.5, 0.18),
+                new T.SphereGeometry(0.7, 16, 16),
+                makeMat(0xfff7cc, 0xfff7cc, 0.7, 0.14),
               );
               halo.position.copy(lamp.position);
               pole.add(mast, arm, lamp, halo);
-              pole.position.set(-13 + i * 9.6, 0, 1.45);
+              pole.position.set(-16 + i * 10.6, 0, 1.75);
               bridge.add(pole);
               poles.push({ pole, lamp, halo, baseX: pole.position.x });
             }
 
-            for (let i = 0; i < 16; i += 1) {
+            for (let i = 0; i < 18; i += 1) {
               const mark = new T.Mesh(
-                new T.BoxGeometry(0.8, 0.03, 0.18),
-                makeMat(0x93c5fd, 0x67e8f9, 0.65, 0.95),
+                new T.BoxGeometry(1.1, 0.03, 0.2),
+                makeMat(0x93c5fd, 0x67e8f9, 0.92, 0.95),
               );
-              mark.position.set(-15 + i * 2, -3.31, -0.35);
+              mark.position.set(-18 + i * 2.35, -3.04, -0.1);
               bridge.add(mark);
               laneMarks.push({ mark, baseX: mark.position.x });
             }
@@ -1323,15 +1334,15 @@ def run_web_ui(
             scene3d.add(stars);
 
             const haze = new T.Mesh(
-              new T.PlaneGeometry(34, 10),
-              makeMat(0x5b9fff, 0x22d3ee, 0.08, 0.12),
+              new T.PlaneGeometry(40, 12),
+              makeMat(0x5b9fff, 0x22d3ee, 0.08, 0.16),
             );
-            haze.position.set(0, 1.5, -11);
+            haze.position.set(1, 1.1, -10.5);
             scene3d.add(haze);
 
             const rider = new T.Group();
-            rider.position.set(-5.1, -2.42, 1.24);
-            rider.scale.setScalar(0.78);
+            rider.position.set(-8.1, -2.05, 1.55);
+            rider.scale.setScalar(1.18);
             scene3d.add(rider);
 
             const riderShadow = new T.Mesh(
