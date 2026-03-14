@@ -258,6 +258,7 @@ def run_web_ui(
     }
     ui.add_head_html(
         """
+        <script src="https://unpkg.com/three@0.161.0/build/three.min.js"></script>
         <style>
           :root {
             --gb-bg: #0b1220;
@@ -485,6 +486,28 @@ def run_web_ui(
             --ve-accent: rgba(167, 139, 250, 0.4);
             --ve-glow: rgba(244, 114, 182, 0.18);
             --ve-road-line: rgba(45, 212, 191, 0.9);
+          }
+          .ve-three-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+            opacity: 0;
+            transition: opacity .24s ease-out;
+            pointer-events: none;
+          }
+          .ve-three-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+          }
+          .ve-scene[data-theme="neon"] .ve-three-layer {
+            opacity: 1;
+          }
+          .ve-scene[data-theme="neon"] .ve-bg,
+          .ve-scene[data-theme="neon"] .ve-road,
+          .ve-scene[data-theme="neon"] .ve-rider {
+            opacity: 0;
+            visibility: hidden;
           }
           .ve-bg {
             position: absolute;
@@ -1002,6 +1025,413 @@ def run_web_ui(
           .ve-dot.jackpot { color: #facc15; background: #facc15; }
         </style>
         <script>
+          window.veloxEnsureThreeScene = function() {
+            const mount = document.getElementById('ve-three-layer');
+            const root = document.getElementById('ve-scene');
+            if (!mount || !root) return null;
+            if (window.__velox_three_scene && window.__velox_three_scene.mount === mount) {
+              return window.__velox_three_scene;
+            }
+            if (!window.THREE) {
+              if (!window.__velox_three_retry) {
+                window.__velox_three_retry = window.setTimeout(() => {
+                  window.__velox_three_retry = 0;
+                  window.veloxEnsureThreeScene();
+                }, 180);
+              }
+              return null;
+            }
+            const T = window.THREE;
+            mount.innerHTML = '<canvas class="ve-three-canvas"></canvas>';
+            const canvas = mount.querySelector('canvas');
+            const renderer = new T.WebGLRenderer({
+              canvas,
+              antialias: true,
+              alpha: true,
+              powerPreference: 'high-performance',
+            });
+            if ('outputColorSpace' in renderer && T.SRGBColorSpace) {
+              renderer.outputColorSpace = T.SRGBColorSpace;
+            }
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+            const scene3d = new T.Scene();
+            scene3d.fog = new T.FogExp2(0x060b16, 0.06);
+
+            const camera = new T.PerspectiveCamera(34, 1, 0.1, 120);
+            camera.position.set(0, 1.3, 15);
+            camera.lookAt(0, 0.4, 0);
+
+            const ambient = new T.HemisphereLight(0x8dd3ff, 0x07101c, 1.55);
+            scene3d.add(ambient);
+            const key = new T.PointLight(0x5eead4, 12, 40, 2);
+            key.position.set(0, 2.5, 8);
+            scene3d.add(key);
+            const rim = new T.PointLight(0xf472b6, 8, 30, 2);
+            rim.position.set(-6, 3, 6);
+            scene3d.add(rim);
+
+            const cityFar = new T.Group();
+            const cityMid = new T.Group();
+            const bridge = new T.Group();
+            const poles = [];
+            const railPosts = [];
+            const laneMarks = [];
+            const farBuildings = [];
+            const midBuildings = [];
+            scene3d.add(cityFar, cityMid, bridge);
+
+            function makeMat(color, emissive, intensity, opacity) {
+              return new T.MeshStandardMaterial({
+                color,
+                emissive,
+                emissiveIntensity: intensity,
+                transparent: opacity < 1,
+                opacity,
+                roughness: 0.45,
+                metalness: 0.2,
+              });
+            }
+
+            function unitCylinder(radius, color, emissive, intensity) {
+              return new T.Mesh(
+                new T.CylinderGeometry(radius, radius, 1, 8),
+                makeMat(color, emissive, intensity, 1),
+              );
+            }
+
+            function placeSegment(mesh, ax, ay, bx, by, depth) {
+              const dx = bx - ax;
+              const dy = by - ay;
+              const len = Math.max(0.001, Math.hypot(dx, dy));
+              mesh.position.set((ax + bx) / 2, (ay + by) / 2, depth);
+              mesh.scale.set(mesh.userData.radius || 0.08, len, mesh.userData.radius || 0.08);
+              mesh.rotation.set(0, 0, Math.atan2(dy, dx) - Math.PI / 2);
+            }
+
+            function addBuilding(group, store, x, y, z, w, h, d, color, emissive, opacity) {
+              const mesh = new T.Mesh(
+                new T.BoxGeometry(w, h, d),
+                makeMat(color, emissive, 0.9, opacity),
+              );
+              mesh.position.set(x, y + h / 2, z);
+              group.add(mesh);
+              store.push({ mesh, baseX: x, baseY: y + h / 2, pulse: 0.6 + Math.random() * 0.8 });
+            }
+
+            for (let i = 0; i < 26; i += 1) {
+              const x = -18 + i * 1.45;
+              addBuilding(
+                cityFar,
+                farBuildings,
+                x,
+                -2.5,
+                -9.5 + Math.random() * 1.5,
+                0.8 + Math.random() * 0.8,
+                1.2 + Math.random() * 3.4,
+                0.5 + Math.random() * 0.9,
+                0x41527c,
+                i % 3 === 0 ? 0xa855f7 : 0x38bdf8,
+                0.45,
+              );
+            }
+            for (let i = 0; i < 18; i += 1) {
+              const x = -18 + i * 2.15;
+              addBuilding(
+                cityMid,
+                midBuildings,
+                x,
+                -2.6,
+                -5.4 + Math.random() * 1.2,
+                1.1 + Math.random() * 1.2,
+                2.2 + Math.random() * 4.8,
+                0.9 + Math.random() * 1.2,
+                0x60739f,
+                i % 2 === 0 ? 0xf472b6 : 0x2dd4bf,
+                0.72,
+              );
+            }
+
+            const road = new T.Mesh(
+              new T.BoxGeometry(42, 1.7, 3.8),
+              makeMat(0x101828, 0x0f172a, 0.12, 1),
+            );
+            road.position.set(0, -4.15, 0.3);
+            bridge.add(road);
+
+            const curb = new T.Mesh(
+              new T.BoxGeometry(42, 0.18, 4),
+              makeMat(0x67e8f9, 0x22d3ee, 0.75, 0.95),
+            );
+            curb.position.set(0, -3.25, 0.35);
+            bridge.add(curb);
+
+            for (let i = 0; i < 22; i += 1) {
+              const post = new T.Mesh(
+                new T.BoxGeometry(0.28, 2.3 + (i % 2) * 0.25, 0.42),
+                makeMat(0x155e75, 0x2dd4bf, 0.22, 0.96),
+              );
+              const cap = new T.Mesh(
+                new T.BoxGeometry(0.38, 0.12, 0.56),
+                makeMat(0x67e8f9, 0x67e8f9, 0.5, 0.96),
+              );
+              const group = new T.Group();
+              group.add(post, cap);
+              post.position.y = -2.35;
+              cap.position.y = -1.15;
+              group.position.set(-20 + i * 1.95, 0, 1.85);
+              bridge.add(group);
+              railPosts.push({ group, baseX: group.position.x });
+            }
+
+            for (let i = 0; i < 3; i += 1) {
+              const pole = new T.Group();
+              const mast = new T.Mesh(
+                new T.CylinderGeometry(0.05, 0.05, 4.8, 8),
+                makeMat(0x94a3b8, 0x1e293b, 0.2, 0.9),
+              );
+              mast.position.y = -0.35;
+              const arm = new T.Mesh(
+                new T.BoxGeometry(0.9, 0.06, 0.06),
+                makeMat(0x94a3b8, 0x1e293b, 0.18, 0.95),
+              );
+              arm.position.set(0.38, 1.95, 0);
+              const lamp = new T.Mesh(
+                new T.SphereGeometry(0.15, 12, 12),
+                makeMat(0xfffbeb, 0xfff3b0, 3.2, 0.92),
+              );
+              lamp.position.set(0.72, 1.85, 0);
+              const halo = new T.Mesh(
+                new T.SphereGeometry(0.45, 16, 16),
+                makeMat(0xfff7cc, 0xfff7cc, 0.5, 0.18),
+              );
+              halo.position.copy(lamp.position);
+              pole.add(mast, arm, lamp, halo);
+              pole.position.set(-13 + i * 9.6, 0, 1.45);
+              bridge.add(pole);
+              poles.push({ pole, lamp, halo, baseX: pole.position.x });
+            }
+
+            for (let i = 0; i < 16; i += 1) {
+              const mark = new T.Mesh(
+                new T.BoxGeometry(0.8, 0.03, 0.18),
+                makeMat(0x93c5fd, 0x67e8f9, 0.65, 0.95),
+              );
+              mark.position.set(-15 + i * 2, -3.31, -0.35);
+              bridge.add(mark);
+              laneMarks.push({ mark, baseX: mark.position.x });
+            }
+
+            const starsGeo = new T.BufferGeometry();
+            const starPositions = [];
+            for (let i = 0; i < 180; i += 1) {
+              starPositions.push((Math.random() - 0.5) * 34, Math.random() * 12 + 1.2, -18 - Math.random() * 10);
+            }
+            starsGeo.setAttribute('position', new T.Float32BufferAttribute(starPositions, 3));
+            const stars = new T.Points(
+              starsGeo,
+              new T.PointsMaterial({ color: 0xe0f2fe, size: 0.09, transparent: true, opacity: 0.85 }),
+            );
+            scene3d.add(stars);
+
+            const haze = new T.Mesh(
+              new T.PlaneGeometry(34, 10),
+              makeMat(0x5b9fff, 0x22d3ee, 0.08, 0.12),
+            );
+            haze.position.set(0, 1.5, -11);
+            scene3d.add(haze);
+
+            const rider = new T.Group();
+            rider.position.set(-5.4, -2.3, 1.25);
+            rider.scale.setScalar(0.72);
+            scene3d.add(rider);
+
+            const wheelMat = makeMat(0x1e3a8a, 0x38bdf8, 0.45, 1);
+            const tireMat = makeMat(0x0f172a, 0x1e293b, 0.22, 1);
+            function makeWheel(x) {
+              const g = new T.Group();
+              const tire = new T.Mesh(new T.TorusGeometry(1, 0.1, 10, 28), tireMat);
+              const rim = new T.Mesh(new T.TorusGeometry(0.82, 0.05, 8, 20), wheelMat);
+              const spokeA = new T.Mesh(new T.BoxGeometry(0.06, 1.45, 0.04), wheelMat);
+              const spokeB = new T.Mesh(new T.BoxGeometry(1.45, 0.06, 0.04), wheelMat);
+              g.add(tire, rim, spokeA, spokeB);
+              g.position.set(x, 0, 0);
+              return g;
+            }
+            const rearWheel = makeWheel(-1.65);
+            const frontWheel = makeWheel(1.65);
+            rider.add(rearWheel, frontWheel);
+
+            function addFrameBar(ax, ay, bx, by, radius, color, emissive, intensity) {
+              const bar = unitCylinder(radius, color, emissive, intensity);
+              bar.userData.radius = radius;
+              rider.add(bar);
+              placeSegment(bar, ax, ay, bx, by, 0.05);
+              return bar;
+            }
+            addFrameBar(-1.65, 0, -0.2, 1.15, 0.07, 0x2563eb, 0x38bdf8, 0.35);
+            addFrameBar(-0.2, 1.15, 1.2, 0.42, 0.07, 0x2563eb, 0x38bdf8, 0.35);
+            addFrameBar(-1.65, 0, 0.1, 0.02, 0.07, 0x2563eb, 0x38bdf8, 0.3);
+            addFrameBar(0.1, 0.02, 1.65, 0, 0.07, 0x2563eb, 0x38bdf8, 0.3);
+            addFrameBar(-0.2, 1.15, -0.85, 1.55, 0.06, 0x1d4ed8, 0x60a5fa, 0.25);
+            addFrameBar(1.2, 0.42, 1.7, 1.18, 0.06, 0x1d4ed8, 0x60a5fa, 0.25);
+            addFrameBar(1.56, 1.25, 2.05, 1.4, 0.05, 0x1d4ed8, 0x60a5fa, 0.22);
+
+            const crank = new T.Group();
+            crank.position.set(0.12, 0.06, 0.1);
+            const crankArmA = new T.Mesh(new T.BoxGeometry(0.08, 0.86, 0.05), makeMat(0xe5e7eb, 0xffffff, 0.08, 1));
+            const crankArmB = crankArmA.clone();
+            crankArmB.rotation.z = Math.PI;
+            const pedalA = new T.Mesh(new T.BoxGeometry(0.28, 0.08, 0.08), makeMat(0x0f172a, 0x1e293b, 0.12, 1));
+            const pedalB = pedalA.clone();
+            pedalA.position.y = 0.42;
+            pedalB.position.y = -0.42;
+            crank.add(crankArmA, crankArmB, pedalA, pedalB);
+            rider.add(crank);
+
+            const torso = unitCylinder(0.18, 0xef4444, 0xfb7185, 0.28);
+            torso.userData.radius = 0.18;
+            const upperArmFront = unitCylinder(0.08, 0xfca5a5, 0xffffff, 0.05);
+            upperArmFront.userData.radius = 0.08;
+            const upperArmRear = unitCylinder(0.08, 0xfca5a5, 0xffffff, 0.04);
+            upperArmRear.userData.radius = 0.08;
+            const thighFront = unitCylinder(0.11, 0xf59e0b, 0xffffff, 0.08);
+            const calfFront = unitCylinder(0.09, 0xfdba74, 0xffffff, 0.08);
+            const thighRear = unitCylinder(0.11, 0xf59e0b, 0xffffff, 0.08);
+            const calfRear = unitCylinder(0.09, 0xfdba74, 0xffffff, 0.08);
+            thighFront.userData.radius = 0.11;
+            calfFront.userData.radius = 0.09;
+            thighRear.userData.radius = 0.11;
+            calfRear.userData.radius = 0.09;
+            const head = new T.Mesh(new T.SphereGeometry(0.3, 16, 16), makeMat(0xfec89a, 0xffedd5, 0.08, 1));
+            const helmet = new T.Mesh(new T.SphereGeometry(0.36, 16, 16, 0, Math.PI * 2, 0, Math.PI * 0.6), makeMat(0xef4444, 0xffffff, 0.18, 1));
+            helmet.position.set(0, 0.08, 0.08);
+            head.add(helmet);
+            rider.add(torso, upperArmFront, upperArmRear, thighFront, calfFront, thighRear, calfRear, head);
+
+            function bendJoint(ax, ay, bx, by, lenA, lenB, bendSign) {
+              const dx = bx - ax;
+              const dy = by - ay;
+              const dist = Math.max(0.001, Math.min(lenA + lenB - 0.02, Math.hypot(dx, dy)));
+              const mx = (ax + bx) / 2;
+              const my = (ay + by) / 2;
+              const h = Math.sqrt(Math.max(0.001, lenA * lenA - ((dist * dist + lenA * lenA - lenB * lenB) / (2 * dist)) ** 2));
+              const nx = -dy / dist;
+              const ny = dx / dist;
+              const a = (lenA * lenA - lenB * lenB + dist * dist) / (2 * dist);
+              return {
+                x: ax + (dx * a) / dist + nx * h * bendSign,
+                y: ay + (dy * a) / dist + ny * h * bendSign,
+              };
+            }
+
+            const state = {
+              speed: 0,
+              cadence: 0,
+              power: 0,
+              intensity: 'mid',
+              action: 'steady',
+              theme: 'neon',
+              tick: 0,
+              pedal: 0,
+            };
+
+            function resize() {
+              const w = Math.max(1, mount.clientWidth);
+              const h = Math.max(1, mount.clientHeight);
+              renderer.setSize(w, h, false);
+              camera.aspect = w / h;
+              camera.updateProjectionMatrix();
+            }
+            const ro = new ResizeObserver(resize);
+            ro.observe(mount);
+            resize();
+
+            function wrapX(base, offset, span) {
+              let x = base + offset;
+              while (x < -span) x += span * 2;
+              while (x > span) x -= span * 2;
+              return x;
+            }
+
+            function render() {
+              const sceneState = window.__velox_three_state || state;
+              state.speed = sceneState.speed || 0;
+              state.cadence = sceneState.cadence || 0;
+              state.power = sceneState.power || 0;
+              state.intensity = sceneState.intensity || 'mid';
+              state.action = sceneState.action || 'steady';
+              state.theme = sceneState.theme || 'neon';
+              state.tick += 0.016 + state.speed * 0.0004;
+              state.pedal += Math.max(0.015, state.cadence * 0.0018);
+              const themeNeon = state.theme === 'neon';
+              mount.style.display = themeNeon ? 'block' : 'none';
+              if (themeNeon) {
+                const farOffset = -state.speed * 0.0028 * state.tick * 60;
+                const midOffset = -state.speed * 0.0076 * state.tick * 60;
+                const nearOffset = -state.speed * 0.03 * state.tick * 60;
+                farBuildings.forEach((item, idx) => {
+                  item.mesh.position.x = wrapX(item.baseX, farOffset + idx * 0.02, 20);
+                  item.mesh.material.emissiveIntensity = 0.55 + Math.sin(state.tick * item.pulse + idx) * 0.1;
+                });
+                midBuildings.forEach((item, idx) => {
+                  item.mesh.position.x = wrapX(item.baseX, midOffset + idx * 0.04, 20);
+                  item.mesh.material.emissiveIntensity = 0.7 + Math.sin(state.tick * (item.pulse + 0.2) + idx) * 0.14;
+                });
+                railPosts.forEach((item) => {
+                  item.group.position.x = wrapX(item.baseX, nearOffset, 22);
+                });
+                laneMarks.forEach((item) => {
+                  item.mark.position.x = wrapX(item.baseX, nearOffset * 1.15, 18);
+                });
+                poles.forEach((item, idx) => {
+                  item.pole.position.x = wrapX(item.baseX, nearOffset * 0.92, 20);
+                  const boost = state.intensity === 'high' ? 1.45 : state.intensity === 'low' ? 0.88 : 1.12;
+                  item.lamp.material.emissiveIntensity = 2.4 * boost;
+                  item.halo.material.opacity = 0.15 * boost;
+                });
+                const boost = state.intensity === 'high' ? 1.2 : state.intensity === 'low' ? 0.88 : 1;
+                haze.material.opacity = 0.1 * boost;
+                stars.rotation.z = Math.sin(state.tick * 0.03) * 0.04;
+                cityFar.position.y = Math.sin(state.tick * 0.2) * 0.03;
+                cityMid.position.y = Math.sin(state.tick * 0.26) * 0.04;
+                road.material.emissiveIntensity = 0.12 + (boost - 0.85) * 0.18;
+                curb.material.emissiveIntensity = 0.72 + (boost - 0.9) * 0.9;
+
+                const pedalAngle = state.pedal;
+                const hip = { x: -0.28, y: 1.62 };
+                const shoulder = { x: 0.42, y: 2.18 + (boost - 1) * 0.14 };
+                const handFront = { x: 1.72, y: 1.5 };
+                const handRear = { x: 1.38, y: 1.7 };
+                const pedalFront = { x: 0.12 + Math.cos(pedalAngle) * 0.48, y: 0.06 + Math.sin(pedalAngle) * 0.48 };
+                const pedalRear = { x: 0.12 + Math.cos(pedalAngle + Math.PI) * 0.48, y: 0.06 + Math.sin(pedalAngle + Math.PI) * 0.48 };
+                const kneeFront = bendJoint(hip.x, hip.y, pedalFront.x, pedalFront.y, 0.9, 0.92, -1);
+                const kneeRear = bendJoint(hip.x - 0.08, hip.y, pedalRear.x, pedalRear.y, 0.94, 0.9, 1);
+                const lean = -0.18 - (boost - 0.9) * 0.24;
+
+                rider.position.y = -2.26 + Math.sin(state.tick * 6.4) * Math.min(0.08, state.cadence / 1600);
+                rider.rotation.z = lean;
+                rearWheel.rotation.z = -state.speed * 0.02 - state.tick * 0.4;
+                frontWheel.rotation.z = rearWheel.rotation.z;
+                crank.rotation.z = -pedalAngle;
+
+                placeSegment(torso, hip.x, hip.y, shoulder.x, shoulder.y, 0.15);
+                placeSegment(upperArmFront, shoulder.x, shoulder.y, handFront.x, handFront.y, 0.18);
+                placeSegment(upperArmRear, shoulder.x - 0.1, shoulder.y + 0.02, handRear.x, handRear.y, -0.08);
+                placeSegment(thighFront, hip.x, hip.y, kneeFront.x, kneeFront.y, 0.08);
+                placeSegment(calfFront, kneeFront.x, kneeFront.y, pedalFront.x, pedalFront.y, 0.08);
+                placeSegment(thighRear, hip.x - 0.08, hip.y, kneeRear.x, kneeRear.y, -0.08);
+                placeSegment(calfRear, kneeRear.x, kneeRear.y, pedalRear.x, pedalRear.y, -0.08);
+                head.position.set(0.72, 2.62 + Math.sin(state.tick * 2.2) * 0.03, 0.22);
+              }
+              renderer.render(scene3d, camera);
+              window.requestAnimationFrame(render);
+            }
+
+            render();
+            window.__velox_three_scene = { mount, renderer, scene3d, camera, rider, resize };
+            return window.__velox_three_scene;
+          };
           window.veloxUpdateScene = function(speed, cadence, power, inZone, action) {
             const scene = document.getElementById('ve-scene');
             if (!scene) return;
@@ -1046,6 +1476,15 @@ def run_web_ui(
             if (intensityScore >= 1.0) intensity = 'high';
             else if (intensityScore < 0.5) intensity = 'low';
             scene.dataset.intensity = intensity;
+            window.__velox_three_state = {
+              speed: s,
+              cadence: c,
+              power: p,
+              intensity,
+              action: action || 'steady',
+              theme: scene.dataset.theme || 'forest',
+            };
+            window.veloxEnsureThreeScene();
             if (spriteNode) {
               const framePhase = Math.floor(state.frameTick) % 12;
               const frameMap = [0, 1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1];
@@ -1079,7 +1518,19 @@ def run_web_ui(
             };
             scene.dataset.theme = nextTheme;
             if (labelNode) labelNode.textContent = labels[nextTheme] || 'Forest trail';
+            if (window.__velox_three_state) {
+              window.__velox_three_state.theme = nextTheme;
+            } else {
+              window.__velox_three_state = { speed: 0, cadence: 0, power: 0, intensity: 'mid', action: 'steady', theme: nextTheme };
+            }
+            window.veloxEnsureThreeScene();
           };
+          window.addEventListener('load', () => {
+            window.setTimeout(() => {
+              if (window.veloxSetSceneTheme) window.veloxSetSceneTheme('neon');
+              if (window.veloxEnsureThreeScene) window.veloxEnsureThreeScene();
+            }, 0);
+          }, { once: true });
           window.veloxPinballFx = function(kind, label) {
             const scene = document.getElementById('ve-scene');
             const fx = document.getElementById('ve-fx');
@@ -1743,23 +2194,24 @@ def run_web_ui(
                 ui.label("Arcade scenery demo").classes("text-xs font-semibold uppercase tracking-wider text-slate-300")
                 scene_theme_toggle = ui.toggle(
                     {"forest": "Forest trail", "alpine": "Alpine dawn", "neon": "Neon night"},
-                    value="forest",
+                    value="neon",
                     on_change=lambda e: _safe_run_js(
                         f"window.veloxSetSceneTheme('{e.value}');"
                     ),
                 ).props("toggle-color=cyan glossy unelevated")
             ui.html(
                 """
-                <div id="ve-scene" class="ve-scene" data-zone="ok" data-theme="forest">
+                <div id="ve-scene" class="ve-scene" data-zone="ok" data-theme="neon">
                   <div class="ve-bg ve-bg-sky"></div>
                   <div class="ve-bg ve-bg-far"></div>
                   <div class="ve-bg ve-bg-mid"></div>
                   <div class="ve-bg ve-bg-front"></div>
                   <div class="ve-bg ve-bg-overlay"></div>
                   <div class="ve-road"></div>
+                  <div id="ve-three-layer" class="ve-three-layer"></div>
                   <div id="ve-fx" class="ve-fx">BONUS!</div>
                   <div class="ve-hud">
-                    <span id="ve-scene-theme-label" class="ve-scenery-badge">Forest trail</span>
+                    <span id="ve-scene-theme-label" class="ve-scenery-badge">Neon night</span>
                     <span id="ve-scene-action" class="ve-hud-action">HOLD</span>
                     <span id="ve-scene-speed" class="ve-hud-speed">0,0 km/h</span>
                   </div>
