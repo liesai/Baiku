@@ -1849,7 +1849,7 @@ def run_web_ui(
                 curb.material.emissiveIntensity = 0.72 + (boost - 0.9) * 0.9;
 
                 const pedalAngle = state.pedal;
-                const bob = Math.sin(state.tick * 6.2) * Math.min(0.07, state.cadence / 1800);
+                const bob = Math.sin(state.tick * 5.6) * Math.min(0.024, state.cadence / 4200);
                 const bikeLean = -0.015;
                 const bodyLean = -0.22 - (boost - 0.9) * 0.14;
                 const hipRear = { x: -0.46, y: 1.28 };

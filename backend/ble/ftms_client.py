@@ -8,6 +8,7 @@ import importlib
 import math
 import random
 import struct
+import time
 from dataclasses import asdict
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Optional
@@ -257,6 +258,12 @@ class FTMSClient:
         self._last_ftms_speed: Optional[float] = None
         self._last_cycling_power: Optional[int] = None
         self._last_cycling_cadence: Optional[float] = None
+        self._last_nonzero_power: Optional[int] = None
+        self._last_nonzero_cadence: Optional[float] = None
+        self._last_nonzero_speed: Optional[float] = None
+        self._last_nonzero_power_ts: float = 0.0
+        self._last_nonzero_cadence_ts: float = 0.0
+        self._last_nonzero_speed_ts: float = 0.0
         self._last_crank_revs: Optional[int] = None
         self._last_crank_event_time: Optional[int] = None
         self._supported_power_range: Optional[tuple[int, int, int]] = None
@@ -711,6 +718,8 @@ class FTMSClient:
         if self._metrics_callback is None:
             return
 
+        now = time.monotonic()
+
         power = (
             self._last_ftms_power
             if self._last_ftms_power is not None
@@ -723,10 +732,45 @@ class FTMSClient:
         elif cadence is None or cadence == 0.0:
             cadence = self._last_cycling_cadence
 
+        speed = self._last_ftms_speed
+
+        if power is not None and power > 0:
+            self._last_nonzero_power = power
+            self._last_nonzero_power_ts = now
+        if cadence is not None and cadence > 0:
+            self._last_nonzero_cadence = cadence
+            self._last_nonzero_cadence_ts = now
+        if speed is not None and speed > 0:
+            self._last_nonzero_speed = speed
+            self._last_nonzero_speed_ts = now
+
+        drop_to_zero = (
+            (power is None or power <= 0)
+            and (cadence is None or cadence <= 0)
+            and (speed is None or speed <= 0)
+        )
+        grace_sec = 1.5
+        if drop_to_zero:
+            if (
+                self._last_nonzero_power is not None
+                and (now - self._last_nonzero_power_ts) <= grace_sec
+            ):
+                power = self._last_nonzero_power
+            if (
+                self._last_nonzero_cadence is not None
+                and (now - self._last_nonzero_cadence_ts) <= grace_sec
+            ):
+                cadence = self._last_nonzero_cadence
+            if (
+                self._last_nonzero_speed is not None
+                and (now - self._last_nonzero_speed_ts) <= grace_sec
+            ):
+                speed = self._last_nonzero_speed
+
         merged = IndoorBikeData(
             instantaneous_power=power,
             instantaneous_cadence=cadence,
-            instantaneous_speed_kmh=self._last_ftms_speed,
+            instantaneous_speed_kmh=speed,
         )
         maybe_coro = self._metrics_callback(merged)
         if asyncio.iscoroutine(maybe_coro):
