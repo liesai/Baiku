@@ -1279,15 +1279,28 @@ def run_web_ui(
 
             const cityFarTexture = makeCanvasTexture(256, 256, (ctx, w, h) => {
               const grad = ctx.createLinearGradient(0, 0, 0, h);
-              grad.addColorStop(0, '#35445d');
-              grad.addColorStop(1, '#223147');
+              grad.addColorStop(0, '#3a4967');
+              grad.addColorStop(0.55, '#293955');
+              grad.addColorStop(1, '#1c273b');
               ctx.fillStyle = grad;
               ctx.fillRect(0, 0, w, h);
-              for (let y = 18; y < h - 8; y += 18) {
-                for (let x = 14; x < w - 14; x += 18) {
-                  ctx.fillStyle = ((x + y) / 18) % 4 === 0 ? 'rgba(56,189,248,0.34)' : 'rgba(255,245,200,0.16)';
-                  ctx.fillRect(x, y, 5, 4);
+              for (let y = 14; y < h - 10; y += 14) {
+                ctx.fillStyle = y % 28 === 0 ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.04)';
+                ctx.fillRect(0, y, w, 1);
+                for (let x = 10; x < w - 10; x += 14) {
+                  const seed = (x * 11 + y * 17) % 19;
+                  if (seed < 4) {
+                    ctx.fillStyle = 'rgba(63,80,110,0.22)';
+                    ctx.fillRect(x, y, 4, 3);
+                  } else if (seed < 12) {
+                    ctx.fillStyle = seed % 3 === 0 ? 'rgba(255,230,160,0.34)' : 'rgba(103,232,249,0.24)';
+                    ctx.fillRect(x, y, 4, 3);
+                  }
                 }
+              }
+              for (let i = 0; i < 6; i += 1) {
+                ctx.fillStyle = i % 2 === 0 ? 'rgba(34,211,238,0.05)' : 'rgba(244,114,182,0.05)';
+                ctx.fillRect(0, 18 + i * 34, w, 2);
               }
             }, 1, 1);
 
@@ -1310,13 +1323,31 @@ def run_web_ui(
             function addBuilding(group, store, x, y, z, w, h, d, color, emissive, opacity, texture) {
               const mat = makeMat(color, emissive, 0.9, opacity);
               if (texture) mat.map = texture;
+              const tower = new T.Group();
               const mesh = new T.Mesh(
                 new T.BoxGeometry(w, h, d),
                 mat,
               );
               mesh.position.set(x, y + h / 2, z);
-              group.add(mesh);
-              store.push({ mesh, baseX: x, baseY: y + h / 2, pulse: 0.6 + Math.random() * 0.8 });
+              tower.add(mesh);
+              if (h > 4.2 && Math.random() > 0.45) {
+                const crown = new T.Mesh(
+                  new T.BoxGeometry(w * (0.42 + Math.random() * 0.24), 0.12 + Math.random() * 0.08, d * 0.78),
+                  makeMat(0xf8fafc, emissive, 1.3, 0.94),
+                );
+                crown.position.set(x, y + h + 0.12, z);
+                tower.add(crown);
+              }
+              if (Math.random() > 0.68) {
+                const beacon = new T.Mesh(
+                  new T.BoxGeometry(0.06, 0.26 + Math.random() * 0.24, 0.06),
+                  makeMat(0xfef3c7, 0xf472b6, 1.6, 0.92),
+                );
+                beacon.position.set(x + (Math.random() - 0.5) * w * 0.22, y + h + 0.26, z);
+                tower.add(beacon);
+              }
+              group.add(tower);
+              store.push({ mesh: tower, baseX: x, baseY: y + h / 2, pulse: 0.6 + Math.random() * 0.8 });
             }
 
             for (let i = 0; i < 38; i += 1) {
@@ -1706,11 +1737,15 @@ def run_web_ui(
                 const nearOffset = state.nearOffset;
                 farBuildings.forEach((item, idx) => {
                   item.mesh.position.x = wrapX(item.baseX, farOffset + idx * 0.02, 28);
-                  item.mesh.material.emissiveIntensity = 0.55 + Math.sin(state.tick * item.pulse + idx) * 0.1;
+                  item.mesh.children.forEach((child, childIdx) => {
+                    if (child.material) child.material.emissiveIntensity = 0.5 + Math.sin(state.tick * item.pulse + idx + childIdx * 0.4) * 0.1;
+                  });
                 });
                 midBuildings.forEach((item, idx) => {
                   item.mesh.position.x = wrapX(item.baseX, midOffset + idx * 0.04, 28);
-                  item.mesh.material.emissiveIntensity = 0.7 + Math.sin(state.tick * (item.pulse + 0.2) + idx) * 0.14;
+                  item.mesh.children.forEach((child, childIdx) => {
+                    if (child.material) child.material.emissiveIntensity = 0.68 + Math.sin(state.tick * (item.pulse + 0.2) + idx + childIdx * 0.5) * 0.14;
+                  });
                 });
                 railPosts.forEach((item) => {
                   item.group.position.x = wrapX(item.baseX, nearOffset, 44);
