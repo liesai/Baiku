@@ -1244,72 +1244,151 @@ def run_web_ui(
             scene3d.add(haze);
 
             const rider = new T.Group();
-            rider.position.set(-5.4, -2.3, 1.25);
-            rider.scale.setScalar(0.72);
+            rider.position.set(-5.1, -2.42, 1.24);
+            rider.scale.setScalar(0.78);
             scene3d.add(rider);
 
-            const wheelMat = makeMat(0x1e3a8a, 0x38bdf8, 0.45, 1);
-            const tireMat = makeMat(0x0f172a, 0x1e293b, 0.22, 1);
-            function makeWheel(x) {
+            const riderShadow = new T.Mesh(
+              new T.CircleGeometry(1.9, 24),
+              new T.MeshBasicMaterial({ color: 0x020617, transparent: true, opacity: 0.28 }),
+            );
+            riderShadow.rotation.x = -Math.PI / 2;
+            riderShadow.position.set(0, -0.98, 0.45);
+            rider.add(riderShadow);
+
+            const tireMat = makeMat(0x111827, 0x0f172a, 0.12, 1);
+            const rimMat = makeMat(0x60a5fa, 0x38bdf8, 0.52, 1);
+            const spokeMat = makeMat(0xb6d8ff, 0x93c5fd, 0.18, 0.92);
+            const frameMat = makeMat(0x2563eb, 0x38bdf8, 0.34, 1);
+            const frameHotMat = makeMat(0x1d4ed8, 0x67e8f9, 0.4, 1);
+            const skinFrontMat = makeMat(0xfdba74, 0xffedd5, 0.08, 1);
+            const skinRearMat = makeMat(0xf59e0b, 0xffedd5, 0.04, 0.94);
+            const shortMat = makeMat(0x0f172a, 0x1e293b, 0.16, 1);
+            const jerseyMat = makeMat(0xef4444, 0xfb7185, 0.22, 1);
+            const gloveMat = makeMat(0x111827, 0x1e293b, 0.08, 1);
+            const shoeMat = makeMat(0x111827, 0x1e293b, 0.08, 1);
+            const helmetMat = makeMat(0xef4444, 0xffffff, 0.24, 1);
+            const visorMat = makeMat(0x0f172a, 0x1e293b, 0.08, 0.96);
+
+            function makeFlatBar(thickness, depth, mat) {
+              const mesh = new T.Mesh(new T.BoxGeometry(thickness, 1, depth), mat);
+              mesh.userData.radius = thickness / 2;
+              return mesh;
+            }
+
+            function placeFlatBar(mesh, ax, ay, bx, by, depth) {
+              const dx = bx - ax;
+              const dy = by - ay;
+              const len = Math.max(0.001, Math.hypot(dx, dy));
+              mesh.position.set((ax + bx) / 2, (ay + by) / 2, depth);
+              mesh.scale.set(1, len, 1);
+              mesh.rotation.set(0, 0, Math.atan2(dy, dx) - Math.PI / 2);
+            }
+
+            function joint(radius, mat, z) {
+              const mesh = new T.Mesh(new T.CircleGeometry(radius, 18), mat);
+              mesh.position.z = z;
+              return mesh;
+            }
+
+            function makeWheel(x, z) {
               const g = new T.Group();
-              const tire = new T.Mesh(new T.TorusGeometry(1, 0.1, 10, 28), tireMat);
-              const rim = new T.Mesh(new T.TorusGeometry(0.82, 0.05, 8, 20), wheelMat);
-              const spokeA = new T.Mesh(new T.BoxGeometry(0.06, 1.45, 0.04), wheelMat);
-              const spokeB = new T.Mesh(new T.BoxGeometry(1.45, 0.06, 0.04), wheelMat);
-              g.add(tire, rim, spokeA, spokeB);
-              g.position.set(x, 0, 0);
+              const tire = new T.Mesh(new T.TorusGeometry(1.02, 0.1, 10, 32), tireMat);
+              const rim = new T.Mesh(new T.TorusGeometry(0.84, 0.04, 8, 28), rimMat);
+              const hub = new T.Mesh(new T.CircleGeometry(0.12, 16), rimMat);
+              const spokeA = new T.Mesh(new T.BoxGeometry(0.06, 1.52, 0.03), spokeMat);
+              const spokeB = new T.Mesh(new T.BoxGeometry(1.52, 0.06, 0.03), spokeMat);
+              const spokeC = spokeA.clone();
+              spokeC.rotation.z = Math.PI / 4;
+              const spokeD = spokeA.clone();
+              spokeD.rotation.z = -Math.PI / 4;
+              g.add(tire, rim, spokeA, spokeB, spokeC, spokeD, hub);
+              g.position.set(x, 0, z);
               return g;
             }
-            const rearWheel = makeWheel(-1.65);
-            const frontWheel = makeWheel(1.65);
+
+            const rearWheel = makeWheel(-1.72, -0.12);
+            const frontWheel = makeWheel(1.7, 0.12);
             rider.add(rearWheel, frontWheel);
 
-            function addFrameBar(ax, ay, bx, by, radius, color, emissive, intensity) {
-              const bar = unitCylinder(radius, color, emissive, intensity);
-              bar.userData.radius = radius;
-              rider.add(bar);
-              placeSegment(bar, ax, ay, bx, by, 0.05);
-              return bar;
-            }
-            addFrameBar(-1.65, 0, -0.2, 1.15, 0.07, 0x2563eb, 0x38bdf8, 0.35);
-            addFrameBar(-0.2, 1.15, 1.2, 0.42, 0.07, 0x2563eb, 0x38bdf8, 0.35);
-            addFrameBar(-1.65, 0, 0.1, 0.02, 0.07, 0x2563eb, 0x38bdf8, 0.3);
-            addFrameBar(0.1, 0.02, 1.65, 0, 0.07, 0x2563eb, 0x38bdf8, 0.3);
-            addFrameBar(-0.2, 1.15, -0.85, 1.55, 0.06, 0x1d4ed8, 0x60a5fa, 0.25);
-            addFrameBar(1.2, 0.42, 1.7, 1.18, 0.06, 0x1d4ed8, 0x60a5fa, 0.25);
-            addFrameBar(1.56, 1.25, 2.05, 1.4, 0.05, 0x1d4ed8, 0x60a5fa, 0.22);
+            const frameBars = [
+              makeFlatBar(0.14, 0.08, frameMat),
+              makeFlatBar(0.14, 0.08, frameMat),
+              makeFlatBar(0.14, 0.08, frameHotMat),
+              makeFlatBar(0.14, 0.08, frameMat),
+              makeFlatBar(0.12, 0.08, frameHotMat),
+              makeFlatBar(0.1, 0.08, frameHotMat),
+              makeFlatBar(0.08, 0.08, frameHotMat),
+              makeFlatBar(0.08, 0.08, gloveMat),
+            ];
+            frameBars.forEach((bar) => rider.add(bar));
+            const saddle = new T.Mesh(new T.BoxGeometry(0.48, 0.11, 0.22), shortMat);
+            saddle.position.set(-0.9, 1.48, -0.02);
+            const stem = new T.Mesh(new T.BoxGeometry(0.08, 0.44, 0.06), frameHotMat);
+            stem.position.set(1.68, 1.08, 0.08);
+            stem.rotation.z = -0.36;
+            const handlebar = new T.Mesh(new T.BoxGeometry(0.56, 0.08, 0.06), gloveMat);
+            handlebar.position.set(2.02, 1.45, 0.1);
+            handlebar.rotation.z = 0.1;
+            rider.add(saddle, stem, handlebar);
 
             const crank = new T.Group();
-            crank.position.set(0.12, 0.06, 0.1);
-            const crankArmA = new T.Mesh(new T.BoxGeometry(0.08, 0.86, 0.05), makeMat(0xe5e7eb, 0xffffff, 0.08, 1));
+            crank.position.set(0.02, 0.08, 0.08);
+            const crankArmA = new T.Mesh(new T.BoxGeometry(0.09, 0.84, 0.04), makeMat(0xe2e8f0, 0xffffff, 0.06, 1));
             const crankArmB = crankArmA.clone();
             crankArmB.rotation.z = Math.PI;
-            const pedalA = new T.Mesh(new T.BoxGeometry(0.28, 0.08, 0.08), makeMat(0x0f172a, 0x1e293b, 0.12, 1));
+            const pedalA = new T.Mesh(new T.BoxGeometry(0.26, 0.08, 0.06), shoeMat);
             const pedalB = pedalA.clone();
             pedalA.position.y = 0.42;
             pedalB.position.y = -0.42;
-            crank.add(crankArmA, crankArmB, pedalA, pedalB);
+            const chainring = new T.Mesh(new T.CircleGeometry(0.16, 18), makeMat(0xe2e8f0, 0x93c5fd, 0.08, 1));
+            crank.add(crankArmA, crankArmB, pedalA, pedalB, chainring);
             rider.add(crank);
 
-            const torso = unitCylinder(0.18, 0xef4444, 0xfb7185, 0.28);
-            torso.userData.radius = 0.18;
-            const upperArmFront = unitCylinder(0.08, 0xfca5a5, 0xffffff, 0.05);
-            upperArmFront.userData.radius = 0.08;
-            const upperArmRear = unitCylinder(0.08, 0xfca5a5, 0xffffff, 0.04);
-            upperArmRear.userData.radius = 0.08;
-            const thighFront = unitCylinder(0.11, 0xf59e0b, 0xffffff, 0.08);
-            const calfFront = unitCylinder(0.09, 0xfdba74, 0xffffff, 0.08);
-            const thighRear = unitCylinder(0.11, 0xf59e0b, 0xffffff, 0.08);
-            const calfRear = unitCylinder(0.09, 0xfdba74, 0xffffff, 0.08);
-            thighFront.userData.radius = 0.11;
-            calfFront.userData.radius = 0.09;
-            thighRear.userData.radius = 0.11;
-            calfRear.userData.radius = 0.09;
-            const head = new T.Mesh(new T.SphereGeometry(0.3, 16, 16), makeMat(0xfec89a, 0xffedd5, 0.08, 1));
-            const helmet = new T.Mesh(new T.SphereGeometry(0.36, 16, 16, 0, Math.PI * 2, 0, Math.PI * 0.6), makeMat(0xef4444, 0xffffff, 0.18, 1));
-            helmet.position.set(0, 0.08, 0.08);
-            head.add(helmet);
-            rider.add(torso, upperArmFront, upperArmRear, thighFront, calfFront, thighRear, calfRear, head);
+            const torso = new T.Mesh(new T.BoxGeometry(1.12, 0.86, 0.22), jerseyMat);
+            const jerseyStripe = new T.Mesh(new T.BoxGeometry(0.22, 0.94, 0.23), makeMat(0xf8fafc, 0xffffff, 0.12, 0.96));
+            const shorts = new T.Mesh(new T.BoxGeometry(0.88, 0.56, 0.2), shortMat);
+            const head = new T.Mesh(new T.CircleGeometry(0.31, 18), skinFrontMat);
+            const helmet = new T.Mesh(new T.CircleGeometry(0.39, 20, Math.PI * 0.1, Math.PI * 1.25), helmetMat);
+            const visor = new T.Mesh(new T.BoxGeometry(0.28, 0.12, 0.03), visorMat);
+            torso.position.z = 0.08;
+            jerseyStripe.position.set(-0.26, 0, 0.02);
+            torso.add(jerseyStripe);
+            visor.position.set(0.04, -0.06, 0.04);
+            head.add(helmet, visor);
+            rider.add(torso, shorts, head);
+
+            const rearThigh = makeFlatBar(0.22, 0.12, skinRearMat);
+            const rearCalf = makeFlatBar(0.18, 0.1, skinRearMat);
+            const frontThigh = makeFlatBar(0.24, 0.14, skinFrontMat);
+            const frontCalf = makeFlatBar(0.18, 0.12, skinFrontMat);
+            const rearUpperArm = makeFlatBar(0.14, 0.08, skinRearMat);
+            const rearForearm = makeFlatBar(0.12, 0.08, skinRearMat);
+            const frontUpperArm = makeFlatBar(0.14, 0.1, skinFrontMat);
+            const frontForearm = makeFlatBar(0.12, 0.1, skinFrontMat);
+            const rearFoot = new T.Mesh(new T.BoxGeometry(0.34, 0.12, 0.08), shoeMat);
+            const frontFoot = rearFoot.clone();
+            const rearHand = new T.Mesh(new T.CircleGeometry(0.08, 12), gloveMat);
+            const frontHand = rearHand.clone();
+            rider.add(
+              rearThigh, rearCalf, frontThigh, frontCalf,
+              rearUpperArm, rearForearm, frontUpperArm, frontForearm,
+              rearFoot, frontFoot, rearHand, frontHand,
+            );
+
+            const joints = {
+              rearHip: joint(0.11, shortMat, -0.06),
+              frontHip: joint(0.12, shortMat, 0.1),
+              rearKnee: joint(0.09, skinRearMat, -0.04),
+              frontKnee: joint(0.09, skinFrontMat, 0.12),
+              rearAnkle: joint(0.07, shoeMat, -0.02),
+              frontAnkle: joint(0.07, shoeMat, 0.1),
+              rearShoulder: joint(0.09, jerseyMat, -0.04),
+              frontShoulder: joint(0.09, jerseyMat, 0.1),
+              rearElbow: joint(0.07, skinRearMat, -0.02),
+              frontElbow: joint(0.07, skinFrontMat, 0.1),
+            };
+            Object.values(joints).forEach((mesh) => rider.add(mesh));
 
             function bendJoint(ax, ay, bx, by, lenA, lenB, bendSign) {
               const dx = bx - ax;
@@ -1402,30 +1481,74 @@ def run_web_ui(
                 curb.material.emissiveIntensity = 0.72 + (boost - 0.9) * 0.9;
 
                 const pedalAngle = state.pedal;
-                const hip = { x: -0.28, y: 1.62 };
-                const shoulder = { x: 0.42, y: 2.18 + (boost - 1) * 0.14 };
-                const handFront = { x: 1.72, y: 1.5 };
-                const handRear = { x: 1.38, y: 1.7 };
-                const pedalFront = { x: 0.12 + Math.cos(pedalAngle) * 0.48, y: 0.06 + Math.sin(pedalAngle) * 0.48 };
-                const pedalRear = { x: 0.12 + Math.cos(pedalAngle + Math.PI) * 0.48, y: 0.06 + Math.sin(pedalAngle + Math.PI) * 0.48 };
-                const kneeFront = bendJoint(hip.x, hip.y, pedalFront.x, pedalFront.y, 0.9, 0.92, -1);
-                const kneeRear = bendJoint(hip.x - 0.08, hip.y, pedalRear.x, pedalRear.y, 0.94, 0.9, 1);
-                const lean = -0.18 - (boost - 0.9) * 0.24;
+                const bob = Math.sin(state.tick * 6.2) * Math.min(0.07, state.cadence / 1800);
+                const lean = -0.14 - (boost - 0.9) * 0.18;
+                const hipRear = { x: -0.46, y: 1.28 };
+                const hipFront = { x: -0.16, y: 1.26 };
+                const shoulderRear = { x: 0.18, y: 2.14 };
+                const shoulderFront = { x: 0.42, y: 2.08 + (boost - 1) * 0.12 };
+                const handRear = { x: 1.54, y: 1.72 };
+                const handFront = { x: 1.88, y: 1.48 };
+                const pedalFront = { x: 0.02 + Math.cos(pedalAngle) * 0.53, y: 0.08 + Math.sin(pedalAngle) * 0.53 };
+                const pedalRear = { x: 0.02 + Math.cos(pedalAngle + Math.PI) * 0.53, y: 0.08 + Math.sin(pedalAngle + Math.PI) * 0.53 };
+                const kneeFront = bendJoint(hipFront.x, hipFront.y, pedalFront.x, pedalFront.y, 0.84, 0.86, -1);
+                const kneeRear = bendJoint(hipRear.x, hipRear.y, pedalRear.x, pedalRear.y, 0.86, 0.84, 1);
+                const elbowFront = bendJoint(shoulderFront.x, shoulderFront.y, handFront.x, handFront.y, 0.58, 0.52, -1);
+                const elbowRear = bendJoint(shoulderRear.x, shoulderRear.y, handRear.x, handRear.y, 0.48, 0.5, 1);
 
-                rider.position.y = -2.26 + Math.sin(state.tick * 6.4) * Math.min(0.08, state.cadence / 1600);
+                rider.position.y = -2.38 + bob;
                 rider.rotation.z = lean;
+                riderShadow.scale.set(1 + boost * 0.05, 0.52 + boost * 0.02, 1);
+                riderShadow.material.opacity = 0.2 + boost * 0.08;
                 rearWheel.rotation.z = -state.speed * 0.02 - state.tick * 0.4;
                 frontWheel.rotation.z = rearWheel.rotation.z;
                 crank.rotation.z = -pedalAngle;
 
-                placeSegment(torso, hip.x, hip.y, shoulder.x, shoulder.y, 0.15);
-                placeSegment(upperArmFront, shoulder.x, shoulder.y, handFront.x, handFront.y, 0.18);
-                placeSegment(upperArmRear, shoulder.x - 0.1, shoulder.y + 0.02, handRear.x, handRear.y, -0.08);
-                placeSegment(thighFront, hip.x, hip.y, kneeFront.x, kneeFront.y, 0.08);
-                placeSegment(calfFront, kneeFront.x, kneeFront.y, pedalFront.x, pedalFront.y, 0.08);
-                placeSegment(thighRear, hip.x - 0.08, hip.y, kneeRear.x, kneeRear.y, -0.08);
-                placeSegment(calfRear, kneeRear.x, kneeRear.y, pedalRear.x, pedalRear.y, -0.08);
-                head.position.set(0.72, 2.62 + Math.sin(state.tick * 2.2) * 0.03, 0.22);
+                placeFlatBar(frameBars[0], -1.72, 0, -0.12, 1.12, 0.02);
+                placeFlatBar(frameBars[1], -0.12, 1.12, 1.12, 0.34, 0.03);
+                placeFlatBar(frameBars[2], -1.72, 0, 0.02, 0.08, 0.02);
+                placeFlatBar(frameBars[3], 0.02, 0.08, 1.7, 0, 0.03);
+                placeFlatBar(frameBars[4], -0.12, 1.12, -0.88, 1.48, -0.01);
+                placeFlatBar(frameBars[5], 1.12, 0.34, 1.74, 1.08, 0.05);
+                placeFlatBar(frameBars[6], 1.74, 1.08, 2.04, 1.42, 0.06);
+                placeFlatBar(frameBars[7], 1.84, 1.44, 2.2, 1.44, 0.07);
+
+                torso.position.set(0.08, 1.74, 0.06);
+                torso.rotation.z = -0.3 - (boost - 1) * 0.16;
+                torso.rotation.y = 0.06;
+                jerseyStripe.position.x = -0.2;
+                shorts.position.set(-0.28, 1.34, 0.05);
+                shorts.rotation.z = -0.1;
+                head.position.set(0.78, 2.44 + Math.sin(state.tick * 2.2) * 0.025, 0.12);
+                head.scale.set(1, 1, 1);
+                head.rotation.z = -0.06;
+
+                placeFlatBar(rearUpperArm, shoulderRear.x, shoulderRear.y, elbowRear.x, elbowRear.y, -0.03);
+                placeFlatBar(rearForearm, elbowRear.x, elbowRear.y, handRear.x, handRear.y, -0.01);
+                placeFlatBar(frontUpperArm, shoulderFront.x, shoulderFront.y, elbowFront.x, elbowFront.y, 0.1);
+                placeFlatBar(frontForearm, elbowFront.x, elbowFront.y, handFront.x, handFront.y, 0.12);
+                placeFlatBar(rearThigh, hipRear.x, hipRear.y, kneeRear.x, kneeRear.y, -0.05);
+                placeFlatBar(rearCalf, kneeRear.x, kneeRear.y, pedalRear.x, pedalRear.y, -0.03);
+                placeFlatBar(frontThigh, hipFront.x, hipFront.y, kneeFront.x, kneeFront.y, 0.12);
+                placeFlatBar(frontCalf, kneeFront.x, kneeFront.y, pedalFront.x, pedalFront.y, 0.14);
+
+                rearFoot.position.set(pedalRear.x, pedalRear.y - 0.02, 0);
+                rearFoot.rotation.z = -pedalAngle + Math.PI * 0.5;
+                frontFoot.position.set(pedalFront.x, pedalFront.y - 0.02, 0.12);
+                frontFoot.rotation.z = -pedalAngle - Math.PI * 0.5;
+                rearHand.position.set(handRear.x, handRear.y, 0.02);
+                frontHand.position.set(handFront.x, handFront.y, 0.14);
+
+                joints.rearHip.position.set(hipRear.x, hipRear.y, -0.04);
+                joints.frontHip.position.set(hipFront.x, hipFront.y, 0.1);
+                joints.rearKnee.position.set(kneeRear.x, kneeRear.y, -0.03);
+                joints.frontKnee.position.set(kneeFront.x, kneeFront.y, 0.12);
+                joints.rearAnkle.position.set(pedalRear.x, pedalRear.y, -0.01);
+                joints.frontAnkle.position.set(pedalFront.x, pedalFront.y, 0.11);
+                joints.rearShoulder.position.set(shoulderRear.x, shoulderRear.y, -0.03);
+                joints.frontShoulder.position.set(shoulderFront.x, shoulderFront.y, 0.1);
+                joints.rearElbow.position.set(elbowRear.x, elbowRear.y, -0.01);
+                joints.frontElbow.position.set(elbowFront.x, elbowFront.y, 0.11);
               }
               renderer.render(scene3d, camera);
               window.requestAnimationFrame(render);
