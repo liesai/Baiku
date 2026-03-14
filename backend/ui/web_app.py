@@ -1198,45 +1198,76 @@ def run_web_ui(
               return tex;
             }
 
-            const roadTexture = makeCanvasTexture(256, 64, (ctx, w, h) => {
-              ctx.fillStyle = '#0b1220';
+            const roadTexture = makeCanvasTexture(512, 128, (ctx, w, h) => {
+              const grad = ctx.createLinearGradient(0, 0, 0, h);
+              grad.addColorStop(0, '#162133');
+              grad.addColorStop(0.4, '#101827');
+              grad.addColorStop(1, '#0b1220');
+              ctx.fillStyle = grad;
               ctx.fillRect(0, 0, w, h);
-              for (let y = 0; y < h; y += 2) {
-                ctx.fillStyle = y % 4 === 0 ? 'rgba(24,40,68,.55)' : 'rgba(8,18,34,.5)';
-                ctx.fillRect(0, y, w, 2);
+              for (let i = 0; i < 1100; i += 1) {
+                const a = 0.02 + Math.random() * 0.045;
+                ctx.fillStyle = `rgba(${18 + (i % 30)},${26 + (i % 26)},${36 + (i % 18)},${a})`;
+                ctx.fillRect(Math.random() * w, Math.random() * h, 2 + Math.random() * 3, 1 + Math.random() * 2);
               }
-              for (let x = 0; x < w; x += 32) {
-                ctx.fillStyle = 'rgba(34,211,238,.16)';
-                ctx.fillRect(x, 6, 18, 2);
+              ctx.strokeStyle = 'rgba(80,95,118,0.22)';
+              ctx.lineWidth = 1;
+              for (let i = 0; i < 18; i += 1) {
+                ctx.beginPath();
+                const x = (i * 37) % w;
+                const y = 20 + (i * 11) % (h - 24);
+                ctx.moveTo(x, y);
+                ctx.lineTo(x + 12 + (i % 5) * 3, y + 2 + (i % 4));
+                ctx.lineTo(x + 22 + (i % 6) * 2, y - 3 + (i % 3));
+                ctx.stroke();
               }
-              for (let i = 0; i < 140; i += 1) {
-                ctx.fillStyle = `rgba(148,163,184,${0.05 + (i % 3) * 0.03})`;
-                ctx.fillRect((i * 17) % w, (i * 11) % h, 2, 2);
+              ctx.fillStyle = 'rgba(34,211,238,0.08)';
+              for (let x = 0; x < w; x += 48) {
+                ctx.fillRect(x, 12, 20, 3);
               }
-            }, 8, 1);
+              ctx.fillStyle = 'rgba(244,114,182,0.05)';
+              ctx.fillRect(0, 0, w, 14);
+            }, 6, 1);
 
-            const cityTexture = makeCanvasTexture(256, 256, (ctx, w, h) => {
-              ctx.fillStyle = '#30415e';
+            const cityTexture = makeCanvasTexture(320, 320, (ctx, w, h) => {
+              const grad = ctx.createLinearGradient(0, 0, 0, h);
+              grad.addColorStop(0, '#61748f');
+              grad.addColorStop(1, '#34445c');
+              ctx.fillStyle = grad;
               ctx.fillRect(0, 0, w, h);
-              for (let y = 10; y < h - 10; y += 14) {
-                for (let x = 8; x < w - 8; x += 14) {
-                  const on = ((x + y) / 14) % 3 !== 0;
-                  ctx.fillStyle = on ? 'rgba(255,214,102,.85)' : 'rgba(84,114,148,.35)';
-                  ctx.fillRect(x, y, 7, 6);
-                  if (on) {
-                    ctx.fillStyle = 'rgba(244,114,182,.22)';
-                    ctx.fillRect(x, y + 6, 7, 1);
+              for (let x = 0; x < w; x += 32) {
+                ctx.fillStyle = x % 64 === 0 ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.06)';
+                ctx.fillRect(x, 0, 2, h);
+              }
+              for (let y = 14; y < h - 10; y += 15) {
+                for (let x = 10; x < w - 10; x += 18) {
+                  const r = (x * 17 + y * 13) % 11;
+                  if (r < 2) {
+                    ctx.fillStyle = 'rgba(72,92,118,0.24)';
+                    ctx.fillRect(x, y, 8, 6);
+                  } else {
+                    ctx.fillStyle = r < 7 ? 'rgba(255,221,142,0.82)' : 'rgba(103,232,249,0.58)';
+                    ctx.fillRect(x, y, 8, 6);
+                    ctx.fillStyle = r < 7 ? 'rgba(244,114,182,0.16)' : 'rgba(255,255,255,0.08)';
+                    ctx.fillRect(x, y + 6, 8, 1);
                   }
                 }
               }
-            }, 1.2, 1);
+              for (let i = 0; i < 9; i += 1) {
+                ctx.fillStyle = i % 2 === 0 ? 'rgba(244,114,182,0.08)' : 'rgba(34,211,238,0.06)';
+                ctx.fillRect(0, 24 + i * 34, w, 2);
+              }
+            }, 1, 1);
 
-            const cityFarTexture = makeCanvasTexture(192, 192, (ctx, w, h) => {
-              ctx.fillStyle = '#243248';
+            const cityFarTexture = makeCanvasTexture(256, 256, (ctx, w, h) => {
+              const grad = ctx.createLinearGradient(0, 0, 0, h);
+              grad.addColorStop(0, '#35445d');
+              grad.addColorStop(1, '#223147');
+              ctx.fillStyle = grad;
               ctx.fillRect(0, 0, w, h);
-              for (let y = 12; y < h - 8; y += 16) {
-                for (let x = 10; x < w - 10; x += 16) {
-                  ctx.fillStyle = (x + y) % 32 === 0 ? 'rgba(56,189,248,.45)' : 'rgba(255,255,255,.12)';
+              for (let y = 18; y < h - 8; y += 18) {
+                for (let x = 14; x < w - 14; x += 18) {
+                  ctx.fillStyle = ((x + y) / 18) % 4 === 0 ? 'rgba(56,189,248,0.34)' : 'rgba(255,245,200,0.16)';
                   ctx.fillRect(x, y, 5, 4);
                 }
               }
@@ -1615,9 +1646,9 @@ def run_web_ui(
               const themeNeon = state.theme === 'neon';
               mount.style.display = themeNeon ? 'block' : 'none';
               if (themeNeon) {
-                const farOffset = -state.speed * 0.0028 * state.tick * 60;
-                const midOffset = -state.speed * 0.0076 * state.tick * 60;
-                const nearOffset = -state.speed * 0.03 * state.tick * 60;
+                const farOffset = -state.speed * 0.0015 * state.tick * 60;
+                const midOffset = -state.speed * 0.0042 * state.tick * 60;
+                const nearOffset = -state.speed * 0.017 * state.tick * 60;
                 farBuildings.forEach((item, idx) => {
                   item.mesh.position.x = wrapX(item.baseX, farOffset + idx * 0.02, 20);
                   item.mesh.material.emissiveIntensity = 0.55 + Math.sin(state.tick * item.pulse + idx) * 0.1;
