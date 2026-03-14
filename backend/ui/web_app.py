@@ -1535,16 +1535,17 @@ def run_web_ui(
               makeFlatBar(0.12, 0.08, frameHotMat),
               makeFlatBar(0.1, 0.08, frameHotMat),
               makeFlatBar(0.08, 0.08, frameHotMat),
+              makeFlatBar(0.1, 0.08, frameHotMat),
               makeFlatBar(0.08, 0.08, gloveMat),
             ];
             frameBars.forEach((bar) => rider.add(bar));
             const saddle = new T.Mesh(new T.BoxGeometry(0.48, 0.11, 0.22), shortMat);
             saddle.position.set(-0.9, 1.48, -0.02);
             const stem = new T.Mesh(new T.BoxGeometry(0.08, 0.44, 0.06), frameHotMat);
-            stem.position.set(1.68, 1.08, 0.08);
+            stem.position.set(1.7, 1.08, 0.08);
             stem.rotation.z = -0.36;
             const handlebar = new T.Mesh(new T.BoxGeometry(0.56, 0.08, 0.06), gloveMat);
-            handlebar.position.set(2.02, 1.45, 0.1);
+            handlebar.position.set(1.98, 1.45, 0.1);
             handlebar.rotation.z = 0.1;
             rider.add(saddle, stem, handlebar);
 
@@ -1777,8 +1778,9 @@ def run_web_ui(
                 placeFlatBar(frameBars[3], 0.02, 0.08, 1.7, 0, 0.03);
                 placeFlatBar(frameBars[4], -0.12, 1.12, -0.88, 1.48, -0.01);
                 placeFlatBar(frameBars[5], 1.12, 0.34, 1.74, 1.08, 0.05);
-                placeFlatBar(frameBars[6], 1.74, 1.08, 2.04, 1.42, 0.06);
-                placeFlatBar(frameBars[7], 1.84, 1.44, 2.2, 1.44, 0.07);
+                placeFlatBar(frameBars[6], 1.7, 1.1, 1.7, 0.02, 0.07);
+                placeFlatBar(frameBars[7], 1.74, 1.08, 2.0, 1.42, 0.06);
+                placeFlatBar(frameBars[8], 1.8, 1.44, 2.14, 1.44, 0.07);
 
                 torso.position.set(0.08, 1.74, 0.06);
                 torso.rotation.z = bodyLean;
