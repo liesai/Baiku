@@ -813,10 +813,10 @@ def run_web_ui(
           }
           .ve-rider {
             position: absolute;
-            left: 46px;
-            bottom: 14px;
-            width: 132px;
-            height: 88px;
+            left: 40px;
+            bottom: 13px;
+            width: 120px;
+            height: 80px;
             transform:
               translateY(var(--ve-rider-bob))
               rotate(var(--ve-rider-tilt))
@@ -828,12 +828,12 @@ def run_web_ui(
             filter: drop-shadow(0 0 12px rgba(255,255,255,0.08));
           }
           .ve-scene[data-theme="alpine"] .ve-rider {
-            bottom: 16px;
-            left: 54px;
+            bottom: 14px;
+            left: 48px;
           }
           .ve-scene[data-theme="neon"] .ve-rider {
-            bottom: 12px;
-            left: 50px;
+            bottom: 11px;
+            left: 44px;
           }
           .ve-rider-shadow {
             position: absolute;
@@ -1051,9 +1051,9 @@ def run_web_ui(
               const frameMap = [0, 1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1];
               const frame = frameMap[framePhase];
               const x = frame * (100 / 6);
-              const shiftByFrame = [0, -1, -2, -1, 1, 2, 1, 2, 1, -1, -2, -1];
-              const rockByFrame = [-1.6, -1.0, -0.3, 0.6, 1.1, 1.7, 1.0, 1.7, 1.1, 0.6, -0.3, -1.0];
-              const liftByFrame = [0, -1, -2, -1, 0, 1, 2, 1, 0, -1, -2, -1];
+              const shiftByFrame = [0, 0, -1, -1, 0, 1, 1, 1, 0, -1, -1, 0];
+              const rockByFrame = [-0.45, -0.25, -0.1, 0.15, 0.35, 0.55, 0.35, 0.55, 0.35, 0.15, -0.1, -0.25];
+              const liftByFrame = [0, 0, -1, -1, 0, 0, 1, 0, 0, -1, -1, 0];
               spriteNode.style.backgroundPosition = `${x}% 0%`;
               scene.style.setProperty('--ve-sprite-shift-x', `${shiftByFrame[framePhase]}px`);
               scene.style.setProperty('--ve-sprite-rock', `${rockByFrame[framePhase]}deg`);
