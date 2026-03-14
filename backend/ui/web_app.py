@@ -1146,9 +1146,9 @@ def run_web_ui(
             const scene3d = new T.Scene();
             scene3d.fog = new T.FogExp2(0x060b16, 0.052);
 
-            const camera = new T.PerspectiveCamera(28, 1, 0.1, 120);
-            camera.position.set(-1.2, 0.92, 12.8);
-            camera.lookAt(1.9, 0.02, -0.3);
+            const camera = new T.OrthographicCamera(-9, 9, 3.8, -3.8, 0.1, 120);
+            camera.position.set(0, 0.2, 12);
+            camera.lookAt(0, 0.2, 0);
 
             const ambient = new T.HemisphereLight(0xa5d8ff, 0x07101c, 1.7);
             scene3d.add(ambient);
@@ -1184,6 +1184,64 @@ def run_web_ui(
               });
             }
 
+            function makeCanvasTexture(width, height, painter, repeatX, repeatY) {
+              const el = document.createElement('canvas');
+              el.width = width;
+              el.height = height;
+              const ctx = el.getContext('2d');
+              painter(ctx, width, height);
+              const tex = new T.CanvasTexture(el);
+              tex.wrapS = T.RepeatWrapping;
+              tex.wrapT = T.RepeatWrapping;
+              tex.repeat.set(repeatX || 1, repeatY || 1);
+              if ('colorSpace' in tex && T.SRGBColorSpace) tex.colorSpace = T.SRGBColorSpace;
+              return tex;
+            }
+
+            const roadTexture = makeCanvasTexture(256, 64, (ctx, w, h) => {
+              ctx.fillStyle = '#0b1220';
+              ctx.fillRect(0, 0, w, h);
+              for (let y = 0; y < h; y += 2) {
+                ctx.fillStyle = y % 4 === 0 ? 'rgba(24,40,68,.55)' : 'rgba(8,18,34,.5)';
+                ctx.fillRect(0, y, w, 2);
+              }
+              for (let x = 0; x < w; x += 32) {
+                ctx.fillStyle = 'rgba(34,211,238,.16)';
+                ctx.fillRect(x, 6, 18, 2);
+              }
+              for (let i = 0; i < 140; i += 1) {
+                ctx.fillStyle = `rgba(148,163,184,${0.05 + (i % 3) * 0.03})`;
+                ctx.fillRect((i * 17) % w, (i * 11) % h, 2, 2);
+              }
+            }, 8, 1);
+
+            const cityTexture = makeCanvasTexture(256, 256, (ctx, w, h) => {
+              ctx.fillStyle = '#30415e';
+              ctx.fillRect(0, 0, w, h);
+              for (let y = 10; y < h - 10; y += 14) {
+                for (let x = 8; x < w - 8; x += 14) {
+                  const on = ((x + y) / 14) % 3 !== 0;
+                  ctx.fillStyle = on ? 'rgba(255,214,102,.85)' : 'rgba(84,114,148,.35)';
+                  ctx.fillRect(x, y, 7, 6);
+                  if (on) {
+                    ctx.fillStyle = 'rgba(244,114,182,.22)';
+                    ctx.fillRect(x, y + 6, 7, 1);
+                  }
+                }
+              }
+            }, 1.2, 1);
+
+            const cityFarTexture = makeCanvasTexture(192, 192, (ctx, w, h) => {
+              ctx.fillStyle = '#243248';
+              ctx.fillRect(0, 0, w, h);
+              for (let y = 12; y < h - 8; y += 16) {
+                for (let x = 10; x < w - 10; x += 16) {
+                  ctx.fillStyle = (x + y) % 32 === 0 ? 'rgba(56,189,248,.45)' : 'rgba(255,255,255,.12)';
+                  ctx.fillRect(x, y, 5, 4);
+                }
+              }
+            }, 1, 1);
+
             function unitCylinder(radius, color, emissive, intensity) {
               return new T.Mesh(
                 new T.CylinderGeometry(radius, radius, 1, 8),
@@ -1200,10 +1258,12 @@ def run_web_ui(
               mesh.rotation.set(0, 0, Math.atan2(dy, dx) - Math.PI / 2);
             }
 
-            function addBuilding(group, store, x, y, z, w, h, d, color, emissive, opacity) {
+            function addBuilding(group, store, x, y, z, w, h, d, color, emissive, opacity, texture) {
+              const mat = makeMat(color, emissive, 0.9, opacity);
+              if (texture) mat.map = texture;
               const mesh = new T.Mesh(
                 new T.BoxGeometry(w, h, d),
-                makeMat(color, emissive, 0.9, opacity),
+                mat,
               );
               mesh.position.set(x, y + h / 2, z);
               group.add(mesh);
@@ -1224,6 +1284,7 @@ def run_web_ui(
                 0x31415f,
                 i % 3 === 0 ? 0xa855f7 : 0x38bdf8,
                 0.34,
+                cityFarTexture,
               );
             }
             for (let i = 0; i < 28; i += 1) {
@@ -1240,14 +1301,17 @@ def run_web_ui(
                 0x556885,
                 i % 2 === 0 ? 0xf472b6 : 0x2dd4bf,
                 0.82,
+                cityTexture,
               );
             }
 
+            const roadMat = makeMat(0x101828, 0x164e63, 0.16, 1);
+            roadMat.map = roadTexture;
             const road = new T.Mesh(
               new T.BoxGeometry(46, 1.9, 4.8),
-              makeMat(0x101828, 0x164e63, 0.16, 1),
+              roadMat,
             );
-            road.position.set(0, -4.05, 0.45);
+            road.position.set(0, -4.05, 0.2);
             bridge.add(road);
 
             const curb = new T.Mesh(
@@ -1258,10 +1322,10 @@ def run_web_ui(
             bridge.add(curb);
 
             const roadGlow = new T.Mesh(
-              new T.PlaneGeometry(42, 2.1),
+              new T.PlaneGeometry(42, 1.7),
               makeMat(0x0f172a, 0xf472b6, 0.14, 0.16),
             );
-            roadGlow.position.set(0, -3.12, 0.92);
+            roadGlow.position.set(0, -3.12, 0.78);
             roadGlow.rotation.x = -Math.PI / 2;
             bridge.add(roadGlow);
 
@@ -1278,7 +1342,7 @@ def run_web_ui(
               group.add(post, cap);
               post.position.y = -2.18;
               cap.position.y = -0.92;
-              group.position.set(-19.8 + i * 1.78, 0, 2.25);
+              group.position.set(-19.8 + i * 1.78, 0, 1.6);
               bridge.add(group);
               railPosts.push({ group, baseX: group.position.x });
             }
@@ -1306,7 +1370,7 @@ def run_web_ui(
               );
               halo.position.copy(lamp.position);
               pole.add(mast, arm, lamp, halo);
-              pole.position.set(-14 + i * 9.8, 0, 1.45);
+              pole.position.set(-14 + i * 9.8, 0, 1.05);
               bridge.add(pole);
               poles.push({ pole, lamp, halo, baseX: pole.position.x });
             }
@@ -1316,7 +1380,7 @@ def run_web_ui(
                 new T.BoxGeometry(1.1, 0.03, 0.2),
                 makeMat(0x93c5fd, 0x67e8f9, 0.92, 0.95),
               );
-              mark.position.set(-16 + i * 2.15, -3.02, 0.0);
+              mark.position.set(-16 + i * 2.15, -3.02, -0.05);
               bridge.add(mark);
               laneMarks.push({ mark, baseX: mark.position.x });
             }
@@ -1337,7 +1401,7 @@ def run_web_ui(
               new T.PlaneGeometry(40, 12),
               makeMat(0x5b9fff, 0x22d3ee, 0.08, 0.16),
             );
-            haze.position.set(1.4, 0.8, -11.8);
+            haze.position.set(0, 0.5, -11.8);
             scene3d.add(haze);
 
             const rider = new T.Group();
@@ -1518,7 +1582,12 @@ def run_web_ui(
               const w = Math.max(1, mount.clientWidth);
               const h = Math.max(1, mount.clientHeight);
               renderer.setSize(w, h, false);
-              camera.aspect = w / h;
+              const aspect = w / h;
+              const orthoHeight = 3.8;
+              camera.left = -orthoHeight * aspect;
+              camera.right = orthoHeight * aspect;
+              camera.top = orthoHeight;
+              camera.bottom = -orthoHeight;
               camera.updateProjectionMatrix();
             }
             const ro = new ResizeObserver(resize);
