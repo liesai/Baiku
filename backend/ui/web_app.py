@@ -503,9 +503,9 @@ def run_web_ui(
           .ve-scene[data-theme="neon"] .ve-three-layer {
             opacity: 1;
           }
-          .ve-scene[data-theme="neon"] .ve-bg,
-          .ve-scene[data-theme="neon"] .ve-road,
-          .ve-scene[data-theme="neon"] .ve-rider {
+          .ve-scene[data-theme="neon"][data-three-ready="1"] .ve-bg,
+          .ve-scene[data-theme="neon"][data-three-ready="1"] .ve-road,
+          .ve-scene[data-theme="neon"][data-three-ready="1"] .ve-rider {
             opacity: 0;
             visibility: hidden;
           }
@@ -1030,9 +1030,11 @@ def run_web_ui(
             const root = document.getElementById('ve-scene');
             if (!mount || !root) return null;
             if (window.__velox_three_scene && window.__velox_three_scene.mount === mount) {
+              root.dataset.threeReady = '1';
               return window.__velox_three_scene;
             }
             if (!window.THREE) {
+              root.dataset.threeReady = '0';
               if (!window.__velox_three_retry) {
                 window.__velox_three_retry = window.setTimeout(() => {
                   window.__velox_three_retry = 0;
@@ -1346,6 +1348,7 @@ def run_web_ui(
             const ro = new ResizeObserver(resize);
             ro.observe(mount);
             resize();
+            root.dataset.threeReady = '1';
 
             function wrapX(base, offset, span) {
               let x = base + offset;
@@ -1525,12 +1528,10 @@ def run_web_ui(
             }
             window.veloxEnsureThreeScene();
           };
-          window.addEventListener('load', () => {
-            window.setTimeout(() => {
-              if (window.veloxSetSceneTheme) window.veloxSetSceneTheme('neon');
-              if (window.veloxEnsureThreeScene) window.veloxEnsureThreeScene();
-            }, 0);
-          }, { once: true });
+          window.setTimeout(() => {
+            if (window.veloxSetSceneTheme) window.veloxSetSceneTheme('neon');
+            if (window.veloxEnsureThreeScene) window.veloxEnsureThreeScene();
+          }, 0);
           window.veloxPinballFx = function(kind, label) {
             const scene = document.getElementById('ve-scene');
             const fx = document.getElementById('ve-fx');
