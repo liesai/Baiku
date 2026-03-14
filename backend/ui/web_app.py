@@ -1630,7 +1630,12 @@ def run_web_ui(
               action: 'steady',
               theme: 'neon',
               tick: 0,
+              lastFrameMs: 0,
               pedal: 0,
+              wheel: 0,
+              farOffset: 0,
+              midOffset: 0,
+              nearOffset: 0,
             };
 
             function resize() {
@@ -1657,22 +1662,32 @@ def run_web_ui(
               return x;
             }
 
-            function render() {
+            function render(nowMs) {
               const sceneState = window.__velox_three_state || state;
+              const frameNow = Number(nowMs || performance.now());
+              const dt = state.lastFrameMs ? Math.min(0.05, Math.max(1 / 240, (frameNow - state.lastFrameMs) / 1000)) : 1 / 60;
+              state.lastFrameMs = frameNow;
               state.speed = sceneState.speed || 0;
               state.cadence = sceneState.cadence || 0;
               state.power = sceneState.power || 0;
               state.intensity = sceneState.intensity || 'mid';
               state.action = sceneState.action || 'steady';
               state.theme = sceneState.theme || 'neon';
-              state.tick += 0.016 + state.speed * 0.0004;
-              state.pedal += Math.max(0.015, state.cadence * 0.0018);
+              state.tick += dt;
               const themeNeon = state.theme === 'neon';
               mount.style.display = themeNeon ? 'block' : 'none';
               if (themeNeon) {
-                const farOffset = -state.speed * 0.0015 * state.tick * 60;
-                const midOffset = -state.speed * 0.0042 * state.tick * 60;
-                const nearOffset = -state.speed * 0.017 * state.tick * 60;
+                const nearVelocity = Math.max(0.45, state.speed * 0.09);
+                const midVelocity = nearVelocity * 0.26;
+                const farVelocity = nearVelocity * 0.1;
+                state.farOffset -= farVelocity * dt;
+                state.midOffset -= midVelocity * dt;
+                state.nearOffset -= nearVelocity * dt;
+                state.pedal -= Math.max(0.25, state.cadence * (Math.PI * 2 / 60)) * dt;
+                state.wheel -= nearVelocity * 4.8 * dt;
+                const farOffset = state.farOffset;
+                const midOffset = state.midOffset;
+                const nearOffset = state.nearOffset;
                 farBuildings.forEach((item, idx) => {
                   item.mesh.position.x = wrapX(item.baseX, farOffset + idx * 0.02, 28);
                   item.mesh.material.emissiveIntensity = 0.55 + Math.sin(state.tick * item.pulse + idx) * 0.1;
@@ -1703,7 +1718,8 @@ def run_web_ui(
 
                 const pedalAngle = state.pedal;
                 const bob = Math.sin(state.tick * 6.2) * Math.min(0.07, state.cadence / 1800);
-                const lean = -0.14 - (boost - 0.9) * 0.18;
+                const bikeLean = -0.015;
+                const bodyLean = -0.22 - (boost - 0.9) * 0.14;
                 const hipRear = { x: -0.46, y: 1.28 };
                 const hipFront = { x: -0.16, y: 1.26 };
                 const shoulderRear = { x: 0.18, y: 2.14 };
@@ -1718,12 +1734,12 @@ def run_web_ui(
                 const elbowRear = bendJoint(shoulderRear.x, shoulderRear.y, handRear.x, handRear.y, 0.48, 0.5, 1);
 
                 rider.position.y = -2.38 + bob;
-                rider.rotation.z = lean;
+                rider.rotation.z = bikeLean;
                 riderShadow.scale.set(1 + boost * 0.05, 0.52 + boost * 0.02, 1);
                 riderShadow.material.opacity = 0.2 + boost * 0.08;
-                rearWheel.rotation.z = -state.speed * 0.02 - state.tick * 0.4;
-                frontWheel.rotation.z = rearWheel.rotation.z;
-                crank.rotation.z = -pedalAngle;
+                rearWheel.rotation.z = state.wheel;
+                frontWheel.rotation.z = state.wheel;
+                crank.rotation.z = pedalAngle;
 
                 placeFlatBar(frameBars[0], -1.72, 0, -0.12, 1.12, 0.02);
                 placeFlatBar(frameBars[1], -0.12, 1.12, 1.12, 0.34, 0.03);
@@ -1735,14 +1751,14 @@ def run_web_ui(
                 placeFlatBar(frameBars[7], 1.84, 1.44, 2.2, 1.44, 0.07);
 
                 torso.position.set(0.08, 1.74, 0.06);
-                torso.rotation.z = -0.3 - (boost - 1) * 0.16;
+                torso.rotation.z = bodyLean;
                 torso.rotation.y = 0.06;
                 jerseyStripe.position.x = -0.2;
                 shorts.position.set(-0.28, 1.34, 0.05);
-                shorts.rotation.z = -0.1;
+                shorts.rotation.z = bodyLean * 0.55;
                 head.position.set(0.78, 2.44 + Math.sin(state.tick * 2.2) * 0.025, 0.12);
                 head.scale.set(1, 1, 1);
-                head.rotation.z = -0.06;
+                head.rotation.z = bodyLean * 0.22;
 
                 placeFlatBar(rearUpperArm, shoulderRear.x, shoulderRear.y, elbowRear.x, elbowRear.y, -0.03);
                 placeFlatBar(rearForearm, elbowRear.x, elbowRear.y, handRear.x, handRear.y, -0.01);
@@ -1754,9 +1770,9 @@ def run_web_ui(
                 placeFlatBar(frontCalf, kneeFront.x, kneeFront.y, pedalFront.x, pedalFront.y, 0.14);
 
                 rearFoot.position.set(pedalRear.x, pedalRear.y - 0.02, 0);
-                rearFoot.rotation.z = -pedalAngle + Math.PI * 0.5;
+                rearFoot.rotation.z = pedalAngle + Math.PI * 0.5;
                 frontFoot.position.set(pedalFront.x, pedalFront.y - 0.02, 0.12);
-                frontFoot.rotation.z = -pedalAngle - Math.PI * 0.5;
+                frontFoot.rotation.z = pedalAngle - Math.PI * 0.5;
                 rearHand.position.set(handRear.x, handRear.y, 0.02);
                 frontHand.position.set(handFront.x, handFront.y, 0.14);
 
@@ -1775,7 +1791,7 @@ def run_web_ui(
               window.requestAnimationFrame(render);
             }
 
-            render();
+            render(performance.now());
             window.__velox_three_scene = { mount, renderer, scene3d, camera, rider, resize, glMode };
             return window.__velox_three_scene;
           };
