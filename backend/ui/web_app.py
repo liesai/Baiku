@@ -1330,6 +1330,50 @@ def run_web_ui(
               mesh.rotation.set(0, 0, Math.atan2(dy, dx) - Math.PI / 2);
             }
 
+            function makeFacadeLights(width, height, isFar) {
+              const canvas = document.createElement('canvas');
+              canvas.width = isFar ? 96 : 128;
+              canvas.height = 256;
+              const ctx = canvas.getContext('2d');
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              const cols = Math.max(2, Math.floor(width / (isFar ? 0.36 : 0.28)));
+              const rows = Math.max(5, Math.floor(height / (isFar ? 0.3 : 0.22)));
+              const padX = isFar ? 8 : 10;
+              const padY = 8;
+              const cellW = (canvas.width - padX * 2) / cols;
+              const cellH = (canvas.height - padY * 2) / rows;
+              for (let y = 0; y < rows; y += 1) {
+                for (let x = 0; x < cols; x += 1) {
+                  const seed = (x * 19 + y * 23 + cols * 7) % 15;
+                  if (seed < 4) continue;
+                  const warm = seed % 4 !== 0;
+                  ctx.fillStyle = warm
+                    ? (seed % 3 === 0 ? 'rgba(255,244,200,0.95)' : 'rgba(255,224,148,0.9)')
+                    : (seed % 2 === 0 ? 'rgba(125,211,252,0.82)' : 'rgba(244,114,182,0.72)');
+                  const px = padX + x * cellW + cellW * 0.18;
+                  const py = padY + y * cellH + cellH * 0.2;
+                  const ww = cellW * 0.54;
+                  const hh = cellH * (isFar ? 0.32 : 0.42);
+                  ctx.fillRect(px, py, ww, hh);
+                  if (!isFar) {
+                    ctx.fillStyle = 'rgba(255,255,255,0.14)';
+                    ctx.fillRect(px + 1, py + 1, Math.max(1, ww - 2), 1);
+                  }
+                }
+              }
+              const tex = new T.CanvasTexture(canvas);
+              tex.needsUpdate = true;
+              return new T.Mesh(
+                new T.PlaneGeometry(width * 0.82, height * 0.88),
+                new T.MeshBasicMaterial({
+                  map: tex,
+                  transparent: true,
+                  opacity: isFar ? 0.72 : 0.92,
+                  depthWrite: false,
+                }),
+              );
+            }
+
             function addBuilding(group, store, x, y, z, w, h, d, color, emissive, opacity, texture) {
               const mat = makeMat(color, emissive, 0.9, opacity);
               if (texture) mat.map = texture;
@@ -1348,6 +1392,9 @@ def run_web_ui(
                 crown.position.set(x, y + h + 0.12, z);
                 tower.add(crown);
               }
+              const facadeLights = makeFacadeLights(w, h, z < -10);
+              facadeLights.position.set(x, y + h / 2, z + d / 2 + 0.03);
+              tower.add(facadeLights);
               if (Math.random() > 0.42) {
                 const lightBand = new T.Mesh(
                   new T.PlaneGeometry(w * (0.38 + Math.random() * 0.28), 0.08 + Math.random() * 0.06),
