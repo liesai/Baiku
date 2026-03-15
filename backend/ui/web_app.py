@@ -2665,6 +2665,45 @@ def run_web_ui(
                 "Standalone bike-only preview. No BLE, no rider, local simulation controls."
             ).classes("text-sm gb-muted")
             ui.html(_scene_markup("neon")).classes("w-full")
+            ui.html(
+                """
+                <script>
+                  window.__bikePreviewApply = function(theme, speed, cadence, power, attempt) {
+                    const tries = Number(attempt || 0);
+                    const scene = document.getElementById('ve-scene');
+                    if (!scene) {
+                      if (tries < 20) {
+                        window.setTimeout(() => window.__bikePreviewApply(theme, speed, cadence, power, tries + 1), 80);
+                      }
+                      return;
+                    }
+                    if (
+                      typeof window.veloxEnsureThreeScene !== 'function' ||
+                      typeof window.veloxSetSceneTheme !== 'function' ||
+                      typeof window.veloxUpdateScene !== 'function'
+                    ) {
+                      if (tries < 20) {
+                        window.setTimeout(() => window.__bikePreviewApply(theme, speed, cadence, power, tries + 1), 80);
+                      }
+                      return;
+                    }
+                    window.__velox_three_state = Object.assign({}, window.__velox_three_state || {}, {
+                      theme: theme || 'neon',
+                      previewMode: true,
+                    });
+                    window.veloxSetSceneTheme(theme || 'neon');
+                    window.veloxEnsureThreeScene();
+                    window.veloxUpdateScene(
+                      Number(speed || 0),
+                      Number(cadence || 0),
+                      Number(power || 0),
+                      true,
+                      'steady',
+                    );
+                  };
+                </script>
+                """
+            )
             with ui.card().classes("w-full gb-card"):
                 with ui.grid().classes("w-full grid-cols-1 md:grid-cols-4 gap-3"):
                     preview_theme = ui.toggle(
@@ -2682,7 +2721,7 @@ def run_web_ui(
 
             def push_preview_state() -> None:
                 ui.run_javascript(
-                    "window.veloxApplyBikePreview("
+                    "if (window.__bikePreviewApply) window.__bikePreviewApply("
                     f"'{preview_theme.value or 'neon'}',"
                     f"{float(preview_speed.value or 0)},"
                     f"{float(preview_cadence.value or 0)},"
