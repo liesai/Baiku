@@ -2229,6 +2229,30 @@ def run_web_ui(
               window.veloxEnsureThreeScene();
             }
           };
+          window.veloxApplyBikePreview = function(theme, speed, cadence, power, attempt) {
+            const tries = Number(attempt || 0);
+            if (
+              typeof window.veloxSetPreviewMode !== 'function' ||
+              typeof window.veloxSetSceneTheme !== 'function' ||
+              typeof window.veloxUpdateScene !== 'function'
+            ) {
+              if (tries < 20) {
+                window.setTimeout(() => {
+                  window.veloxApplyBikePreview(theme, speed, cadence, power, tries + 1);
+                }, 80);
+              }
+              return;
+            }
+            window.veloxSetPreviewMode(true);
+            window.veloxSetSceneTheme(theme || 'neon');
+            window.veloxUpdateScene(
+              Number(speed || 0),
+              Number(cadence || 0),
+              Number(power || 0),
+              true,
+              'steady',
+            );
+          };
           window.addEventListener('velox-three-ready', () => {
             const scene = document.getElementById('ve-scene');
             if (scene && (scene.dataset.theme || 'forest') === 'neon' && window.veloxEnsureThreeScene) {
@@ -2658,13 +2682,12 @@ def run_web_ui(
 
             def push_preview_state() -> None:
                 ui.run_javascript(
-                    "window.veloxSetPreviewMode(true);"
-                    f"window.veloxSetSceneTheme('{preview_theme.value or 'neon'}');"
-                    "window.veloxUpdateScene("
+                    "window.veloxApplyBikePreview("
+                    f"'{preview_theme.value or 'neon'}',"
                     f"{float(preview_speed.value or 0)},"
                     f"{float(preview_cadence.value or 0)},"
-                    f"{float(preview_power.value or 0)},"
-                    "true,'steady');"
+                    f"{float(preview_power.value or 0)}"
+                    ");"
                 )
 
             preview_theme.on_value_change(lambda _: push_preview_state())
