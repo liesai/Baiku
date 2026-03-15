@@ -2657,24 +2657,15 @@ def run_web_ui(
 
     @ui.page("/bike-preview")
     def bike_preview_page() -> None:
-        with ui.column().classes("w-full max-w-5xl mx-auto gap-4 p-4"):
-            with ui.row().classes("w-full items-center justify-between gap-3 flex-wrap"):
-                ui.label("Bike Preview").classes("text-2xl font-semibold")
-                ui.link("Back to app", "/").classes("text-cyan-300 text-sm")
-            ui.label(
-                "Standalone bike-only preview. No BLE, no rider, local simulation controls."
-            ).classes("text-sm gb-muted")
-            ui.html(_scene_markup("neon")).classes("w-full")
-            ui.html(
+        def push_preview_state() -> None:
+            ui.run_javascript(
                 """
-                <script>
-                  window.__bikePreviewApply = function(theme, speed, cadence, power, attempt) {
+                (function(theme, speed, cadence, power) {
+                  window.__bikePreviewApply = window.__bikePreviewApply || function(theme, speed, cadence, power, attempt) {
                     const tries = Number(attempt || 0);
                     const scene = document.getElementById('ve-scene');
                     if (!scene) {
-                      if (tries < 20) {
-                        window.setTimeout(() => window.__bikePreviewApply(theme, speed, cadence, power, tries + 1), 80);
-                      }
+                      if (tries < 20) window.setTimeout(() => window.__bikePreviewApply(theme, speed, cadence, power, tries + 1), 80);
                       return;
                     }
                     if (
@@ -2682,9 +2673,7 @@ def run_web_ui(
                       typeof window.veloxSetSceneTheme !== 'function' ||
                       typeof window.veloxUpdateScene !== 'function'
                     ) {
-                      if (tries < 20) {
-                        window.setTimeout(() => window.__bikePreviewApply(theme, speed, cadence, power, tries + 1), 80);
-                      }
+                      if (tries < 20) window.setTimeout(() => window.__bikePreviewApply(theme, speed, cadence, power, tries + 1), 80);
                       return;
                     }
                     window.__velox_three_state = Object.assign({}, window.__velox_three_state || {}, {
@@ -2693,17 +2682,25 @@ def run_web_ui(
                     });
                     window.veloxSetSceneTheme(theme || 'neon');
                     window.veloxEnsureThreeScene();
-                    window.veloxUpdateScene(
-                      Number(speed || 0),
-                      Number(cadence || 0),
-                      Number(power || 0),
-                      true,
-                      'steady',
-                    );
+                    window.veloxUpdateScene(Number(speed || 0), Number(cadence || 0), Number(power || 0), true, 'steady');
                   };
-                </script>
+                  window.__bikePreviewApply(theme, speed, cadence, power, 0);
+                })(__THEME__, __SPEED__, __CADENCE__, __POWER__);
                 """
+                .replace("__THEME__", f"'{preview_theme.value or 'neon'}'")
+                .replace("__SPEED__", str(float(preview_speed.value or 0)))
+                .replace("__CADENCE__", str(float(preview_cadence.value or 0)))
+                .replace("__POWER__", str(float(preview_power.value or 0)))
             )
+
+        with ui.column().classes("w-full max-w-5xl mx-auto gap-4 p-4"):
+            with ui.row().classes("w-full items-center justify-between gap-3 flex-wrap"):
+                ui.label("Bike Preview").classes("text-2xl font-semibold")
+                ui.link("Back to app", "/").classes("text-cyan-300 text-sm")
+            ui.label(
+                "Standalone bike-only preview. No BLE, no rider, local simulation controls."
+            ).classes("text-sm gb-muted")
+            ui.html(_scene_markup("neon")).classes("w-full")
             with ui.card().classes("w-full gb-card"):
                 with ui.grid().classes("w-full grid-cols-1 md:grid-cols-4 gap-3"):
                     preview_theme = ui.toggle(
@@ -2718,16 +2715,6 @@ def run_web_ui(
                     ui.label("Speed km/h")
                     ui.label("Cadence rpm")
                     ui.label("Power W")
-
-            def push_preview_state() -> None:
-                ui.run_javascript(
-                    "if (window.__bikePreviewApply) window.__bikePreviewApply("
-                    f"'{preview_theme.value or 'neon'}',"
-                    f"{float(preview_speed.value or 0)},"
-                    f"{float(preview_cadence.value or 0)},"
-                    f"{float(preview_power.value or 0)}"
-                    ");"
-                )
 
             preview_theme.on_value_change(lambda _: push_preview_state())
             preview_speed.on_value_change(lambda _: push_preview_state())
