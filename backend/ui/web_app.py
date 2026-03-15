@@ -1619,28 +1619,84 @@ def run_web_ui(
               return mesh;
             }
 
-            function makeWheel(x, z) {
+            function makeWheel(x, z, isRear) {
               const g = new T.Group();
-              const tire = new T.Mesh(new T.TorusGeometry(0.98, 0.07, 10, 34), tireMat);
-              const rim = new T.Mesh(new T.TorusGeometry(0.83, 0.028, 8, 30), rimMat);
-              const hub = new T.Mesh(new T.CircleGeometry(0.11, 18), rimMat);
-              const spokeA = new T.Mesh(new T.BoxGeometry(0.034, 1.5, 0.03), spokeMat);
-              const spokeB = new T.Mesh(new T.BoxGeometry(1.5, 0.034, 0.03), spokeMat);
-              const spokeC = spokeA.clone();
-              spokeC.rotation.z = Math.PI / 4;
-              const spokeD = spokeA.clone();
-              spokeD.rotation.z = -Math.PI / 4;
-              const wheelGlow = new T.Mesh(
-                new T.RingGeometry(0.9, 1.02, 32),
-                new T.MeshBasicMaterial({ color: 0x67e8f9, transparent: true, opacity: 0.08 }),
+              const scale = 3.42 / 1000.0;
+              const beadSeatRadius = (622 * scale) / 2;
+              const tireRadius = 28 * scale;
+              const tireTubeRadius = tireRadius * 0.52;
+              const tireMajorRadius = beadSeatRadius + tireRadius - tireTubeRadius;
+              const rimDepth = 23 * scale;
+              const rimOuterRadius = beadSeatRadius;
+              const rimTubeRadius = rimDepth * 0.48;
+              const rimMajorRadius = rimOuterRadius - rimTubeRadius;
+              const flangeRadius = ((isRear ? 56 : 50) * scale) / 2;
+              const hubRadius = ((isRear ? 38 : 34) * scale) / 2;
+              const spokeAnchorRadius = (596 * scale) / 2;
+
+              function setSegment(mesh, ax, ay, bx, by, zz) {
+                const dx = bx - ax;
+                const dy = by - ay;
+                mesh.position.set((ax + bx) / 2, (ay + by) / 2, zz);
+                mesh.scale.y = Math.max(0.001, Math.hypot(dx, dy));
+                mesh.rotation.z = Math.atan2(dy, dx) - Math.PI / 2;
+              }
+
+              const tire = new T.Mesh(new T.TorusGeometry(tireMajorRadius, tireTubeRadius, 12, 56), tireMat);
+              const rim = new T.Mesh(new T.TorusGeometry(rimMajorRadius, rimTubeRadius, 10, 56), rimMat);
+              const brakeTrack = new T.Mesh(
+                new T.TorusGeometry(beadSeatRadius - 0.01, 0.012, 8, 48),
+                makeMat(0xe2e8f0, 0xffffff, 0.12, 0.95),
               );
-              g.add(wheelGlow, tire, rim, spokeA, spokeB, spokeC, spokeD, hub);
+              const wheelGlow = new T.Mesh(
+                new T.RingGeometry(beadSeatRadius - 0.1, beadSeatRadius + 0.08, 48),
+                new T.MeshBasicMaterial({ color: 0x67e8f9, transparent: true, opacity: 0.06 }),
+              );
+              const hubShell = new T.Mesh(new T.CircleGeometry(hubRadius, 24), rimMat);
+              const driveShell = new T.Mesh(
+                new T.CircleGeometry(isRear ? hubRadius * 0.78 : hubRadius * 0.92, 20),
+                makeMat(0xcbd5e1, 0xffffff, 0.08, 0.9),
+              );
+              const frontFlange = new T.Mesh(new T.CircleGeometry(flangeRadius, 20), spokeMat);
+              const rearFlange = new T.Mesh(new T.CircleGeometry(flangeRadius * 0.92, 20), spokeMat);
+              frontFlange.position.z = isRear ? 0.05 : 0.035;
+              rearFlange.position.z = isRear ? -0.055 : -0.035;
+              driveShell.position.z = isRear ? -0.06 : -0.02;
+
+              const spokeCount = 12;
+              for (let i = 0; i < spokeCount; i += 1) {
+                const angle = (i / spokeCount) * Math.PI * 2;
+                const crossing = (isRear ? 0.16 : 0.12);
+                const frontAnchor = angle + crossing;
+                const rearAnchor = angle - crossing;
+                const spokeFront = new T.Mesh(new T.BoxGeometry(0.018, 1, 0.018), spokeMat);
+                const spokeRear = new T.Mesh(new T.BoxGeometry(0.018, 1, 0.018), spokeMat);
+                setSegment(
+                  spokeFront,
+                  Math.cos(angle) * flangeRadius * 0.72,
+                  Math.sin(angle) * flangeRadius * 0.72,
+                  Math.cos(frontAnchor) * spokeAnchorRadius,
+                  Math.sin(frontAnchor) * spokeAnchorRadius,
+                  frontFlange.position.z,
+                );
+                setSegment(
+                  spokeRear,
+                  Math.cos(angle + 0.18) * flangeRadius * 0.68,
+                  Math.sin(angle + 0.18) * flangeRadius * 0.68,
+                  Math.cos(rearAnchor) * spokeAnchorRadius,
+                  Math.sin(rearAnchor) * spokeAnchorRadius,
+                  rearFlange.position.z,
+                );
+                g.add(spokeFront, spokeRear);
+              }
+
+              g.add(wheelGlow, tire, rim, brakeTrack, frontFlange, rearFlange, hubShell, driveShell);
               g.position.set(x, 0, z);
               return g;
             }
 
-            const rearWheel = makeWheel(-1.72, -0.12);
-            const frontWheel = makeWheel(1.7, 0.12);
+            const rearWheel = makeWheel(-1.72, -0.12, true);
+            const frontWheel = makeWheel(1.7, 0.12, false);
             rider.add(rearWheel, frontWheel);
 
             const bikeGeo = (() => {
