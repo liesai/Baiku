@@ -2657,8 +2657,10 @@ def run_web_ui(
 
     @ui.page("/bike-preview")
     def bike_preview_page() -> None:
-        def push_preview_state() -> None:
-            ui.run_javascript(
+        client = ui.context.client
+
+        async def push_preview_state() -> None:
+            await client.run_javascript(
                 """
                 (function(theme, speed, cadence, power) {
                   window.__bikePreviewApply = window.__bikePreviewApply || function(theme, speed, cadence, power, attempt) {
@@ -2693,6 +2695,12 @@ def run_web_ui(
                 .replace("__POWER__", str(float(preview_power.value or 0)))
             )
 
+        async def bootstrap_preview() -> None:
+            await client.connected()
+            for _ in range(3):
+                await push_preview_state()
+                await asyncio.sleep(0.12)
+
         with ui.column().classes("w-full max-w-5xl mx-auto gap-4 p-4"):
             with ui.row().classes("w-full items-center justify-between gap-3 flex-wrap"):
                 ui.label("Bike Preview").classes("text-2xl font-semibold")
@@ -2716,11 +2724,11 @@ def run_web_ui(
                     ui.label("Cadence rpm")
                     ui.label("Power W")
 
-            preview_theme.on_value_change(lambda _: push_preview_state())
-            preview_speed.on_value_change(lambda _: push_preview_state())
-            preview_cadence.on_value_change(lambda _: push_preview_state())
-            preview_power.on_value_change(lambda _: push_preview_state())
-            ui.timer(0.1, push_preview_state, once=True)
+            preview_theme.on_value_change(lambda _: asyncio.create_task(push_preview_state()))
+            preview_speed.on_value_change(lambda _: asyncio.create_task(push_preview_state()))
+            preview_cadence.on_value_change(lambda _: asyncio.create_task(push_preview_state()))
+            preview_power.on_value_change(lambda _: asyncio.create_task(push_preview_state()))
+            client.on_connect(bootstrap_preview)
 
     with ui.column().classes("w-full gap-2") as setup_header:
         with ui.row().classes("w-full items-center justify-between gap-2"):
