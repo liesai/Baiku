@@ -1665,7 +1665,8 @@ def run_web_ui(
               const headDx = Math.cos(73.0 * Math.PI / 180.0) * (168 * bikeScale);
               const headDy = Math.sin(73.0 * Math.PI / 180.0) * (168 * bikeScale);
               const headBottom = { x: headTop.x + headDx, y: headTop.y - headDy };
-              const saddle = { x: seatTop.x - 0.02, y: seatTop.y + 0.18 };
+              const seatClamp = { x: seatTop.x - 0.05, y: seatTop.y + 0.08 };
+              const saddle = { x: seatClamp.x - 0.02, y: seatClamp.y + 0.06 };
               const handlebar = { x: headTop.x + 0.3, y: headTop.y + 0.02 };
               const stemTop = { x: headTop.x + 0.11, y: headTop.y + 0.06 };
               return {
@@ -1673,6 +1674,7 @@ def run_web_ui(
                 frontAxle,
                 bb,
                 seatTop,
+                seatClamp,
                 headTop,
                 headBottom,
                 saddle,
@@ -1772,12 +1774,28 @@ def run_web_ui(
               makeFlatBar(0.08, 0.08, gloveMat),
             ];
             frameBars.forEach((bar) => rider.add(bar));
-            const saddle = new T.Mesh(new T.BoxGeometry(0.5, 0.08, 0.18), shortMat);
+            const saddle = new T.Group();
+            const saddleBase = new T.Mesh(new T.BoxGeometry(0.44, 0.05, 0.17), shortMat);
+            const saddleNose = new T.Mesh(new T.BoxGeometry(0.17, 0.035, 0.12), shortMat);
+            const saddleTail = new T.Mesh(new T.BoxGeometry(0.16, 0.06, 0.17), shortMat);
+            const railMat = makeMat(0xcbd5e1, 0xffffff, 0.06, 0.92);
+            const railRear = makeFlatBar(0.018, 0.02, railMat);
+            const railFront = makeFlatBar(0.018, 0.02, railMat);
+            const seatClamp = new T.Mesh(new T.BoxGeometry(0.07, 0.05, 0.06), frameHotMat);
+            saddleBase.position.set(-0.02, 0, 0);
+            saddleNose.position.set(0.21, -0.005, 0);
+            saddleTail.position.set(-0.16, 0.025, 0);
+            railRear.position.z = -0.05;
+            railFront.position.z = 0.05;
+            placeFlatBar(railRear, -0.12, -0.035, 0.08, -0.03, railRear.position.z);
+            placeFlatBar(railFront, -0.12, -0.035, 0.08, -0.03, railFront.position.z);
+            seatClamp.position.set(-0.05, -0.04, 0);
+            saddle.add(saddleBase, saddleNose, saddleTail, railRear, railFront, seatClamp);
             saddle.position.set(bikeGeo.saddle.x, bikeGeo.saddle.y, -0.02);
-            saddle.rotation.z = -0.02;
-            const seatpost = new T.Mesh(new T.BoxGeometry(0.05, 0.38, 0.06), frameHotMat);
-            seatpost.position.set((bikeGeo.seatTop.x + bikeGeo.saddle.x) / 2, (bikeGeo.seatTop.y + bikeGeo.saddle.y - 0.02) / 2, -0.03);
-            seatpost.rotation.z = -0.08;
+            saddle.rotation.z = -0.03;
+            const seatpost = new T.Mesh(new T.BoxGeometry(0.034, 0.34, 0.06), frameHotMat);
+            seatpost.position.set((bikeGeo.seatTop.x + bikeGeo.seatClamp.x) / 2, (bikeGeo.seatTop.y + bikeGeo.seatClamp.y) / 2, -0.03);
+            seatpost.rotation.z = -0.11;
             const stem = new T.Mesh(new T.BoxGeometry(0.06, 0.24, 0.06), frameHotMat);
             stem.position.set(bikeGeo.stemTop.x, bikeGeo.stemTop.y, 0.08);
             stem.rotation.z = -1.12;
@@ -2036,7 +2054,7 @@ def run_web_ui(
                 placeFlatBar(frameBars[4], bikeGeo.bb.x, bikeGeo.bb.y, bikeGeo.seatTop.x, bikeGeo.seatTop.y, -0.01);
                 placeFlatBar(frameBars[5], bikeGeo.headTop.x, bikeGeo.headTop.y, bikeGeo.headBottom.x, bikeGeo.headBottom.y, 0.05);
                 placeFlatBar(frameBars[6], bikeGeo.headBottom.x, bikeGeo.headBottom.y, bikeGeo.frontAxle.x, bikeGeo.frontAxle.y + 0.02, 0.07);
-                placeFlatBar(frameBars[7], bikeGeo.seatTop.x, bikeGeo.seatTop.y, bikeGeo.saddle.x - 0.02, bikeGeo.saddle.y - 0.02, -0.04);
+                placeFlatBar(frameBars[7], bikeGeo.seatTop.x, bikeGeo.seatTop.y, bikeGeo.seatClamp.x, bikeGeo.seatClamp.y, -0.04);
                 placeFlatBar(frameBars[8], bikeGeo.headTop.x, bikeGeo.headTop.y, bikeGeo.handlebar.x, bikeGeo.handlebar.y, 0.07);
 
                 torso.position.set(bikeGeo.headTop.x - 0.8, bikeGeo.headTop.y - 0.04, 0.06);
