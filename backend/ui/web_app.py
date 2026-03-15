@@ -251,6 +251,7 @@ def run_web_ui(
         ble_pair=ble_pair,
     )
     state = WebState()
+    connections_scan_task: asyncio.Task[Any] | None = None
     pinball_mode = ui_theme == "pinball"
     csp_safe_mode = pinball_mode and os.getenv("VELOX_UI_CSP_SAFE", "").lower() in {
         "1",
@@ -4333,11 +4334,24 @@ def run_web_ui(
         refresh_templates()
         refresh_ui()
 
+    async def _deferred_open_connections_scan() -> None:
+        nonlocal connections_scan_task
+        try:
+            await asyncio.sleep(0.05)
+            if not state.connected and not state.ht_busy:
+                await on_scan_ht(auto_connect=True)
+        finally:
+            connections_scan_task = None
+
     async def on_open_connections() -> None:
+        nonlocal connections_scan_task
         show_connections_screen()
         refresh_ui()
-        if not state.connected:
-            await on_scan_ht(auto_connect=True)
+        if not state.connected and not state.ht_busy:
+            if connections_scan_task is None or connections_scan_task.done():
+                connections_scan_task = asyncio.create_task(
+                    _deferred_open_connections_scan()
+                )
 
     def on_back_to_training_setup() -> None:
         show_setup_screen()
