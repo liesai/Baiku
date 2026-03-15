@@ -1644,20 +1644,56 @@ def run_web_ui(
               return mesh;
             }
 
+            const bikeScale = 3.42 / 1000.0;
+            const wheelSpec = {
+              beadSeatRadius: (622 * bikeScale) / 2,
+              outerRadius: (672 * bikeScale) / 2,
+              erdRadius: (596 * bikeScale) / 2,
+              tireWidth: 25 * bikeScale,
+              rimDepth: 23 * bikeScale,
+            };
+
+            const bikeGeo = (() => {
+              const rearAxle = { x: -1.71, y: 0.0 };
+              const frontAxle = { x: rearAxle.x + (1000 * bikeScale), y: 0.0 };
+              const bb = { x: rearAxle.x + (415 * bikeScale), y: -(75 * bikeScale) };
+              const seatTop = {
+                x: bb.x - Math.cos(73.5 * Math.PI / 180.0) * (520 * bikeScale),
+                y: bb.y + Math.sin(73.5 * Math.PI / 180.0) * (520 * bikeScale),
+              };
+              const headTop = { x: bb.x + (378 * bikeScale), y: bb.y + (575 * bikeScale) };
+              const headDx = Math.cos(73.0 * Math.PI / 180.0) * (168 * bikeScale);
+              const headDy = Math.sin(73.0 * Math.PI / 180.0) * (168 * bikeScale);
+              const headBottom = { x: headTop.x + headDx, y: headTop.y - headDy };
+              const saddle = { x: seatTop.x - 0.02, y: seatTop.y + 0.18 };
+              const handlebar = { x: headTop.x + 0.3, y: headTop.y + 0.02 };
+              const stemTop = { x: headTop.x + 0.11, y: headTop.y + 0.06 };
+              return {
+                rearAxle,
+                frontAxle,
+                bb,
+                seatTop,
+                headTop,
+                headBottom,
+                saddle,
+                handlebar,
+                stemTop,
+                wheelOuterRadius: wheelSpec.outerRadius,
+                wheelTireWidth: wheelSpec.tireWidth,
+                rearWheelZ: -0.12,
+                frontWheelZ: 0.12,
+              };
+            })();
+
             function makeWheel(x, z, isRear) {
               const g = new T.Group();
-              const scale = 3.42 / 1000.0;
-              const beadSeatRadius = (622 * scale) / 2;
-              const tireRadius = 28 * scale;
-              const tireTubeRadius = tireRadius * 0.52;
-              const tireMajorRadius = beadSeatRadius + tireRadius - tireTubeRadius;
-              const rimDepth = 23 * scale;
-              const rimOuterRadius = beadSeatRadius;
-              const rimTubeRadius = rimDepth * 0.48;
-              const rimMajorRadius = rimOuterRadius - rimTubeRadius;
-              const flangeRadius = ((isRear ? 56 : 50) * scale) / 2;
-              const hubRadius = ((isRear ? 38 : 34) * scale) / 2;
-              const spokeAnchorRadius = (596 * scale) / 2;
+              const tireTubeRadius = wheelSpec.tireWidth * 0.34;
+              const tireMajorRadius = wheelSpec.outerRadius - tireTubeRadius;
+              const rimTubeRadius = wheelSpec.rimDepth * 0.34;
+              const rimMajorRadius = wheelSpec.beadSeatRadius - rimTubeRadius;
+              const flangeRadius = ((isRear ? 52 : 46) * bikeScale) / 2;
+              const hubRadius = ((isRear ? 34 : 30) * bikeScale) / 2;
+              const spokeAnchorRadius = wheelSpec.erdRadius;
 
               function setSegment(mesh, ax, ay, bx, by, zz) {
                 const dx = bx - ax;
@@ -1670,11 +1706,11 @@ def run_web_ui(
               const tire = new T.Mesh(new T.TorusGeometry(tireMajorRadius, tireTubeRadius, 12, 56), tireMat);
               const rim = new T.Mesh(new T.TorusGeometry(rimMajorRadius, rimTubeRadius, 10, 56), rimMat);
               const brakeTrack = new T.Mesh(
-                new T.TorusGeometry(beadSeatRadius - 0.01, 0.012, 8, 48),
+                new T.TorusGeometry(wheelSpec.beadSeatRadius - 0.01, 0.01, 8, 48),
                 makeMat(0xe2e8f0, 0xffffff, 0.12, 0.95),
               );
               const wheelGlow = new T.Mesh(
-                new T.RingGeometry(beadSeatRadius - 0.1, beadSeatRadius + 0.08, 48),
+                new T.RingGeometry(wheelSpec.outerRadius - 0.08, wheelSpec.outerRadius + 0.03, 48),
                 new T.MeshBasicMaterial({ color: 0x67e8f9, transparent: true, opacity: 0.06 }),
               );
               const hubShell = new T.Mesh(new T.CircleGeometry(hubRadius, 24), rimMat);
@@ -1720,28 +1756,9 @@ def run_web_ui(
               return g;
             }
 
-            const rearWheel = makeWheel(-1.72, -0.12, true);
-            const frontWheel = makeWheel(1.7, 0.12, false);
+            const rearWheel = makeWheel(bikeGeo.rearAxle.x, bikeGeo.rearAxle.y + bikeGeo.rearWheelZ, true);
+            const frontWheel = makeWheel(bikeGeo.frontAxle.x, bikeGeo.frontAxle.y + bikeGeo.frontWheelZ, false);
             rider.add(rearWheel, frontWheel);
-
-            const bikeGeo = (() => {
-              const unit = 3.42 / 1000.0; // 1000 mm wheelbase mapped to the current side-view span.
-              const rearAxle = { x: -1.71, y: 0.0 };
-              const frontAxle = { x: rearAxle.x + (1000 * unit), y: 0.0 };
-              const bb = { x: rearAxle.x + (415 * unit), y: -(75 * unit) };
-              const seatTop = {
-                x: bb.x - Math.cos(73.5 * Math.PI / 180.0) * (520 * unit),
-                y: bb.y + Math.sin(73.5 * Math.PI / 180.0) * (520 * unit),
-              };
-              const headTop = { x: bb.x + (378 * unit), y: bb.y + (575 * unit) };
-              const headDx = Math.cos(73.0 * Math.PI / 180.0) * (168 * unit);
-              const headDy = Math.sin(73.0 * Math.PI / 180.0) * (168 * unit);
-              const headBottom = { x: headTop.x + headDx, y: headTop.y - headDy };
-              const saddle = { x: seatTop.x - 0.02, y: seatTop.y + 0.18 };
-              const handlebar = { x: headTop.x + 0.3, y: headTop.y + 0.02 };
-              const stemTop = { x: headTop.x + 0.11, y: headTop.y + 0.06 };
-              return { rearAxle, frontAxle, bb, seatTop, headTop, headBottom, saddle, handlebar, stemTop };
-            })();
 
             const frameBars = [
               makeFlatBar(0.14, 0.08, frameMat),
