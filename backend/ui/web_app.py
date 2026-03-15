@@ -1643,6 +1643,25 @@ def run_web_ui(
             const frontWheel = makeWheel(1.7, 0.12);
             rider.add(rearWheel, frontWheel);
 
+            const bikeGeo = (() => {
+              const unit = 3.42 / 1000.0; // 1000 mm wheelbase mapped to the current side-view span.
+              const rearAxle = { x: -1.71, y: 0.0 };
+              const frontAxle = { x: rearAxle.x + (1000 * unit), y: 0.0 };
+              const bb = { x: rearAxle.x + (415 * unit), y: -(75 * unit) };
+              const seatTop = {
+                x: bb.x - Math.cos(73.5 * Math.PI / 180.0) * (520 * unit),
+                y: bb.y + Math.sin(73.5 * Math.PI / 180.0) * (520 * unit),
+              };
+              const headTop = { x: bb.x + (378 * unit), y: bb.y + (575 * unit) };
+              const headDx = Math.cos(73.0 * Math.PI / 180.0) * (168 * unit);
+              const headDy = Math.sin(73.0 * Math.PI / 180.0) * (168 * unit);
+              const headBottom = { x: headTop.x + headDx, y: headTop.y - headDy };
+              const saddle = { x: seatTop.x - 0.12, y: seatTop.y + 0.08 };
+              const handlebar = { x: headTop.x + 0.38, y: headTop.y + 0.06 };
+              const stemTop = { x: headTop.x + 0.12, y: headTop.y + 0.10 };
+              return { rearAxle, frontAxle, bb, seatTop, headTop, headBottom, saddle, handlebar, stemTop };
+            })();
+
             const frameBars = [
               makeFlatBar(0.14, 0.08, frameMat),
               makeFlatBar(0.14, 0.08, frameMat),
@@ -1656,18 +1675,18 @@ def run_web_ui(
             ];
             frameBars.forEach((bar) => rider.add(bar));
             const saddle = new T.Mesh(new T.BoxGeometry(0.54, 0.09, 0.18), shortMat);
-            saddle.position.set(-0.78, 1.58, -0.02);
-            saddle.rotation.z = -0.04;
+            saddle.position.set(bikeGeo.saddle.x, bikeGeo.saddle.y, -0.02);
+            saddle.rotation.z = -0.06;
             const stem = new T.Mesh(new T.BoxGeometry(0.08, 0.34, 0.06), frameHotMat);
-            stem.position.set(1.36, 1.46, 0.08);
-            stem.rotation.z = -0.6;
+            stem.position.set(bikeGeo.stemTop.x, bikeGeo.stemTop.y, 0.08);
+            stem.rotation.z = -0.42;
             const handlebar = new T.Mesh(new T.BoxGeometry(0.52, 0.07, 0.06), gloveMat);
-            handlebar.position.set(1.9, 1.62, 0.1);
-            handlebar.rotation.z = -0.12;
+            handlebar.position.set(bikeGeo.handlebar.x, bikeGeo.handlebar.y, 0.1);
+            handlebar.rotation.z = -0.04;
             rider.add(saddle, stem, handlebar);
 
             const crank = new T.Group();
-            crank.position.set(0.02, 0.08, 0.08);
+            crank.position.set(bikeGeo.bb.x, bikeGeo.bb.y, 0.08);
             const crankArmA = new T.Mesh(new T.BoxGeometry(0.09, 0.84, 0.04), makeMat(0xe2e8f0, 0xffffff, 0.06, 1));
             const crankArmB = crankArmA.clone();
             crankArmB.rotation.z = Math.PI;
@@ -1851,15 +1870,15 @@ def run_web_ui(
                 const pedalAngle = state.pedal;
                 const bob = Math.sin(state.tick * 5.6) * Math.min(0.024, state.cadence / 4200);
                 const bikeLean = -0.015;
-                const bodyLean = -0.22 - (boost - 0.9) * 0.14;
-                const hipRear = { x: -0.46, y: 1.28 };
-                const hipFront = { x: -0.16, y: 1.26 };
-                const shoulderRear = { x: 0.18, y: 2.14 };
-                const shoulderFront = { x: 0.42, y: 2.08 + (boost - 1) * 0.12 };
-                const handRear = { x: 1.54, y: 1.72 };
-                const handFront = { x: 1.88, y: 1.48 };
-                const pedalFront = { x: 0.02 + Math.cos(pedalAngle) * 0.53, y: 0.08 + Math.sin(pedalAngle) * 0.53 };
-                const pedalRear = { x: 0.02 + Math.cos(pedalAngle + Math.PI) * 0.53, y: 0.08 + Math.sin(pedalAngle + Math.PI) * 0.53 };
+                const bodyLean = -0.19 - (boost - 0.9) * 0.12;
+                const hipRear = { x: bikeGeo.seatTop.x + 0.08, y: bikeGeo.seatTop.y - 0.18 };
+                const hipFront = { x: bikeGeo.seatTop.x + 0.34, y: bikeGeo.seatTop.y - 0.20 };
+                const shoulderRear = { x: bikeGeo.headTop.x - 0.72, y: bikeGeo.headTop.y + 0.34 };
+                const shoulderFront = { x: bikeGeo.headTop.x - 0.48, y: bikeGeo.headTop.y + 0.30 + (boost - 1) * 0.08 };
+                const handRear = { x: bikeGeo.handlebar.x - 0.14, y: bikeGeo.handlebar.y + 0.02 };
+                const handFront = { x: bikeGeo.handlebar.x + 0.12, y: bikeGeo.handlebar.y - 0.04 };
+                const pedalFront = { x: bikeGeo.bb.x + Math.cos(pedalAngle) * 0.53, y: bikeGeo.bb.y + Math.sin(pedalAngle) * 0.53 };
+                const pedalRear = { x: bikeGeo.bb.x + Math.cos(pedalAngle + Math.PI) * 0.53, y: bikeGeo.bb.y + Math.sin(pedalAngle + Math.PI) * 0.53 };
                 const kneeFront = bendJointPreferred(
                   hipFront.x,
                   hipFront.y,
@@ -1893,23 +1912,23 @@ def run_web_ui(
                 frontWheel.rotation.z = state.wheel;
                 crank.rotation.z = pedalAngle;
 
-                placeFlatBar(frameBars[0], -0.38, 1.28, 1.18, 1.26, 0.04);
-                placeFlatBar(frameBars[1], -1.72, 0, -0.38, 1.28, -0.03);
-                placeFlatBar(frameBars[2], -1.72, 0, 0.02, 0.08, 0.02);
-                placeFlatBar(frameBars[3], 0.02, 0.08, 1.02, 0.56, 0.03);
-                placeFlatBar(frameBars[4], 0.02, 0.08, -0.38, 1.28, -0.01);
-                placeFlatBar(frameBars[5], 1.18, 1.26, 1.1, 0.64, 0.05);
-                placeFlatBar(frameBars[6], 1.1, 0.64, 1.7, 0.02, 0.07);
-                placeFlatBar(frameBars[7], -0.38, 1.28, -0.78, 1.58, -0.04);
-                placeFlatBar(frameBars[8], 1.18, 1.26, 1.9, 1.62, 0.07);
+                placeFlatBar(frameBars[0], bikeGeo.seatTop.x, bikeGeo.seatTop.y, bikeGeo.headTop.x, bikeGeo.headTop.y, 0.04);
+                placeFlatBar(frameBars[1], bikeGeo.rearAxle.x, bikeGeo.rearAxle.y, bikeGeo.seatTop.x, bikeGeo.seatTop.y, -0.03);
+                placeFlatBar(frameBars[2], bikeGeo.rearAxle.x, bikeGeo.rearAxle.y, bikeGeo.bb.x, bikeGeo.bb.y, 0.02);
+                placeFlatBar(frameBars[3], bikeGeo.bb.x, bikeGeo.bb.y, bikeGeo.headBottom.x, bikeGeo.headBottom.y, 0.03);
+                placeFlatBar(frameBars[4], bikeGeo.bb.x, bikeGeo.bb.y, bikeGeo.seatTop.x, bikeGeo.seatTop.y, -0.01);
+                placeFlatBar(frameBars[5], bikeGeo.headTop.x, bikeGeo.headTop.y, bikeGeo.headBottom.x, bikeGeo.headBottom.y, 0.05);
+                placeFlatBar(frameBars[6], bikeGeo.headBottom.x, bikeGeo.headBottom.y, bikeGeo.frontAxle.x, bikeGeo.frontAxle.y + 0.02, 0.07);
+                placeFlatBar(frameBars[7], bikeGeo.seatTop.x, bikeGeo.seatTop.y, bikeGeo.saddle.x - 0.02, bikeGeo.saddle.y - 0.02, -0.04);
+                placeFlatBar(frameBars[8], bikeGeo.headTop.x, bikeGeo.headTop.y, bikeGeo.handlebar.x, bikeGeo.handlebar.y, 0.07);
 
-                torso.position.set(0.08, 1.74, 0.06);
+                torso.position.set(bikeGeo.headTop.x - 0.88, bikeGeo.headTop.y + 0.02, 0.06);
                 torso.rotation.z = bodyLean;
                 torso.rotation.y = 0.06;
                 jerseyStripe.position.x = -0.2;
-                shorts.position.set(-0.28, 1.34, 0.05);
+                shorts.position.set(bikeGeo.seatTop.x + 0.12, bikeGeo.seatTop.y - 0.12, 0.05);
                 shorts.rotation.z = bodyLean * 0.55;
-                head.position.set(0.78, 2.44 + Math.sin(state.tick * 2.2) * 0.025, 0.12);
+                head.position.set(bikeGeo.headTop.x - 0.22, bikeGeo.headTop.y + 0.7 + Math.sin(state.tick * 2.2) * 0.025, 0.12);
                 head.scale.set(1, 1, 1);
                 head.rotation.z = bodyLean * 0.22;
 
