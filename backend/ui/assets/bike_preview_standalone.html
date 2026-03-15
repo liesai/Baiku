@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bike Preview</title>
+  <style>
+    :root {
+      --bg: #08101f;
+      --panel: rgba(15, 23, 42, 0.86);
+      --line: rgba(56, 189, 248, 0.28);
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #22d3ee;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      font-family: Arial, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at top, rgba(30, 41, 59, 0.9) 0%, rgba(8, 16, 31, 1) 58%),
+        linear-gradient(180deg, #050816 0%, #08101f 100%);
+    }
+    .wrap {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 24px;
+      display: grid;
+      gap: 16px;
+    }
+    .head {
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    h1 {
+      margin: 0;
+      font-size: 28px;
+    }
+    .sub {
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--panel);
+      box-shadow: 0 18px 48px rgba(2, 6, 23, 0.35);
+    }
+    .viewport {
+      height: 520px;
+      overflow: hidden;
+      position: relative;
+      background:
+        radial-gradient(circle at 50% -10%, rgba(244, 114, 182, 0.16) 0%, rgba(244, 114, 182, 0) 30%),
+        linear-gradient(180deg, #030712 0%, #071426 28%, #0b1b35 64%, #050816 100%);
+    }
+    #app {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .overlay {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      border-radius: 999px;
+      background: rgba(2, 6, 23, 0.52);
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      backdrop-filter: blur(6px);
+    }
+    .ok { color: #a7f3d0; }
+    .controls {
+      padding: 16px;
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    .control {
+      display: grid;
+      gap: 8px;
+    }
+    .control label {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .control output {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+    @media (max-width: 900px) {
+      .controls { grid-template-columns: 1fr 1fr; }
+      .viewport { height: 420px; }
+    }
+    @media (max-width: 560px) {
+      .controls { grid-template-columns: 1fr; }
+      .viewport { height: 340px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="head">
+      <div>
+        <h1>Bike Preview</h1>
+        <div class="sub">Standalone HTML. No NiceGUI, no BLE, bike only.</div>
+      </div>
+      <div class="badge ok" id="status">Three webgl2</div>
+    </div>
+    <div class="panel viewport">
+      <canvas id="app"></canvas>
+      <div class="overlay">
+        <div class="badge">Road Bike M Geometry</div>
+        <div class="badge" id="theme-badge">Neon</div>
+      </div>
+    </div>
+    <div class="panel controls">
+      <div class="control">
+        <label for="theme">Theme</label>
+        <select id="theme">
+          <option value="neon">Neon</option>
+          <option value="forest">Forest</option>
+          <option value="alpine">Alpine</option>
+        </select>
+      </div>
+      <div class="control">
+        <label for="speed">Speed</label>
+        <input id="speed" type="range" min="0" max="45" value="28" step="0.5">
+        <output id="speed-out">28.0 km/h</output>
+      </div>
+      <div class="control">
+        <label for="cadence">Cadence</label>
+        <input id="cadence" type="range" min="0" max="120" value="88" step="1">
+        <output id="cadence-out">88 rpm</output>
+      </div>
+      <div class="control">
+        <label for="power">Power</label>
+        <input id="power" type="range" min="0" max="400" value="180" step="5">
+        <output id="power-out">180 W</output>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from './vendor/three.module.js';
+
+    const canvas = document.getElementById('app');
+    const statusNode = document.getElementById('status');
+    const themeBadge = document.getElementById('theme-badge');
+    const speedInput = document.getElementById('speed');
+    const cadenceInput = document.getElementById('cadence');
+    const powerInput = document.getElementById('power');
+    const themeInput = document.getElementById('theme');
+    const speedOut = document.getElementById('speed-out');
+    const cadenceOut = document.getElementById('cadence-out');
+    const powerOut = document.getElementById('power-out');
+
+    let gl = canvas.getContext('webgl2', { alpha: true, antialias: true, powerPreference: 'high-performance' });
+    let glMode = 'webgl2';
+    if (!gl) {
+      gl = canvas.getContext('webgl', { alpha: true, antialias: true, powerPreference: 'high-performance' });
+      glMode = gl ? 'webgl' : 'failed';
+    }
+    if (!gl) {
+      statusNode.textContent = 'WebGL failed';
+      throw new Error('WebGL unavailable');
+    }
+    statusNode.textContent = `Three ${glMode}`;
+
+    const renderer = new THREE.WebGLRenderer({ canvas, context: gl, alpha: true, antialias: true });
+    if ('outputColorSpace' in renderer && THREE.SRGBColorSpace) renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x060b16, 0.052);
+
+    const camera = new THREE.OrthographicCamera(-9, 9, 5, -5, 0.1, 100);
+    camera.position.set(0, 0, 12);
+    camera.lookAt(0, 0, 0);
+
+    const amb = new THREE.AmbientLight(0xffffff, 1.4);
+    const key = new THREE.PointLight(0x67e8f9, 10.0, 32);
+    key.position.set(-4, 6, 8);
+    const fill = new THREE.PointLight(0xf472b6, 7.5, 28);
+    fill.position.set(6, 4, 7);
+    scene.add(amb, key, fill);
+
+    const makeMat = (base, emissive, intensity = 0.1, opacity = 1) => new THREE.MeshStandardMaterial({
+      color: base,
+      emissive,
+      emissiveIntensity: intensity,
+      transparent: opacity < 1,
+      opacity,
+      roughness: 0.52,
+      metalness: 0.12,
+    });
+
+    const tireMat = makeMat(0x020617, 0x0f172a, 0.08, 1);
+    const rimMat = makeMat(0x93c5fd, 0x67e8f9, 0.45, 1);
+    const spokeMat = makeMat(0xe2e8f0, 0xffffff, 0.08, 0.95);
+    const frameMat = makeMat(0x1d4ed8, 0x38bdf8, 0.26, 1);
+    const frameHotMat = makeMat(0x2563eb, 0x67e8f9, 0.38, 1);
+    const darkMat = makeMat(0x111827, 0x1e293b, 0.06, 1);
+    const railMat = makeMat(0xcbd5e1, 0xffffff, 0.06, 0.92);
+
+    const group = new THREE.Group();
+    group.position.set(0, -0.55, 0);
+    scene.add(group);
+
+    function makeFlatBar(thickness, depth, mat) {
+      return new THREE.Mesh(new THREE.BoxGeometry(thickness, 1, depth), mat);
+    }
+    function placeFlatBar(mesh, ax, ay, bx, by, depth) {
+      const dx = bx - ax;
+      const dy = by - ay;
+      const len = Math.max(0.001, Math.hypot(dx, dy));
+      mesh.position.set((ax + bx) / 2, (ay + by) / 2, depth);
+      mesh.scale.set(1, len, 1);
+      mesh.rotation.set(0, 0, Math.atan2(dy, dx) - Math.PI / 2);
+    }
+
+    const bikeScale = 3.42 / 1000.0;
+    const wheelSpec = {
+      beadSeatRadius: (622 * bikeScale) / 2,
+      outerRadius: (666 * bikeScale) / 2,
+      erdRadius: (596 * bikeScale) / 2,
+      tireWidth: 25 * bikeScale,
+      rimDepth: 23 * bikeScale,
+    };
+
+    const bikeGeo = (() => {
+      const rearAxle = { x: -1.71, y: 0.0 };
+      const frontAxle = { x: rearAxle.x + (1000 * bikeScale), y: 0.0 };
+      const bb = { x: rearAxle.x + (415 * bikeScale), y: -(75 * bikeScale) };
+      const seatTop = {
+        x: bb.x - Math.cos(73.5 * Math.PI / 180.0) * (520 * bikeScale),
+        y: bb.y + Math.sin(73.5 * Math.PI / 180.0) * (520 * bikeScale),
+      };
+      const headTop = { x: bb.x + (378 * bikeScale), y: bb.y + (575 * bikeScale) };
+      const headDx = Math.cos(73.0 * Math.PI / 180.0) * (168 * bikeScale);
+      const headDy = Math.sin(73.0 * Math.PI / 180.0) * (168 * bikeScale);
+      const headBottom = { x: headTop.x + headDx, y: headTop.y - headDy };
+      const seatClamp = { x: seatTop.x - 0.05, y: seatTop.y + 0.12 };
+      const saddle = { x: seatClamp.x - 0.02, y: seatClamp.y + 0.065 };
+      const handlebar = { x: headTop.x + 0.3, y: headTop.y + 0.02 };
+      const stemTop = { x: headTop.x + 0.11, y: headTop.y + 0.06 };
+      return { rearAxle, frontAxle, bb, seatTop, seatClamp, headTop, headBottom, saddle, handlebar, stemTop };
+    })();
+
+    function makeWheel(x, z, isRear) {
+      const g = new THREE.Group();
+      const tireTubeRadius = wheelSpec.tireWidth * 0.34;
+      const tireMajorRadius = wheelSpec.outerRadius - tireTubeRadius;
+      const rimTubeRadius = wheelSpec.rimDepth * 0.34;
+      const rimMajorRadius = wheelSpec.beadSeatRadius - rimTubeRadius;
+      const flangeRadius = ((isRear ? 52 : 46) * bikeScale) / 2;
+      const hubRadius = ((isRear ? 34 : 30) * bikeScale) / 2;
+      const spokeAnchorRadius = wheelSpec.erdRadius;
+
+      const setSegment = (mesh, ax, ay, bx, by, zz) => {
+        const dx = bx - ax;
+        const dy = by - ay;
+        mesh.position.set((ax + bx) / 2, (ay + by) / 2, zz);
+        mesh.scale.y = Math.max(0.001, Math.hypot(dx, dy));
+        mesh.rotation.z = Math.atan2(dy, dx) - Math.PI / 2;
+      };
+
+      const tire = new THREE.Mesh(new THREE.TorusGeometry(tireMajorRadius, tireTubeRadius, 12, 56), tireMat);
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(rimMajorRadius, rimTubeRadius, 10, 56), rimMat);
+      const brakeTrack = new THREE.Mesh(new THREE.TorusGeometry(wheelSpec.beadSeatRadius - 0.01, 0.01, 8, 48), railMat);
+      const hubShell = new THREE.Mesh(new THREE.CircleGeometry(hubRadius, 24), rimMat);
+      const frontFlange = new THREE.Mesh(new THREE.CircleGeometry(flangeRadius, 20), spokeMat);
+      const rearFlange = new THREE.Mesh(new THREE.CircleGeometry(flangeRadius * 0.92, 20), spokeMat);
+      frontFlange.position.z = isRear ? 0.05 : 0.035;
+      rearFlange.position.z = isRear ? -0.055 : -0.035;
+
+      const spokeCount = 12;
+      for (let i = 0; i < spokeCount; i += 1) {
+        const angle = (i / spokeCount) * Math.PI * 2;
+        const crossing = isRear ? 0.16 : 0.12;
+        const frontAnchor = angle + crossing;
+        const rearAnchor = angle - crossing;
+        const spokeFront = new THREE.Mesh(new THREE.BoxGeometry(0.018, 1, 0.018), spokeMat);
+        const spokeRear = new THREE.Mesh(new THREE.BoxGeometry(0.018, 1, 0.018), spokeMat);
+        setSegment(
+          spokeFront,
+          Math.cos(angle) * flangeRadius * 0.72,
+          Math.sin(angle) * flangeRadius * 0.72,
+          Math.cos(frontAnchor) * spokeAnchorRadius,
+          Math.sin(frontAnchor) * spokeAnchorRadius,
+          frontFlange.position.z,
+        );
+        setSegment(
+          spokeRear,
+          Math.cos(angle + 0.18) * flangeRadius * 0.68,
+          Math.sin(angle + 0.18) * flangeRadius * 0.68,
+          Math.cos(rearAnchor) * spokeAnchorRadius,
+          Math.sin(rearAnchor) * spokeAnchorRadius,
+          rearFlange.position.z,
+        );
+        g.add(spokeFront, spokeRear);
+      }
+
+      g.add(tire, rim, brakeTrack, frontFlange, rearFlange, hubShell);
+      g.position.set(x, 0, z);
+      return g;
+    }
+
+    const rearWheel = makeWheel(bikeGeo.rearAxle.x, -0.12, true);
+    const frontWheel = makeWheel(bikeGeo.frontAxle.x, 0.12, false);
+    group.add(rearWheel, frontWheel);
+
+    const frameBars = [
+      makeFlatBar(0.14, 0.08, frameMat),
+      makeFlatBar(0.14, 0.08, frameMat),
+      makeFlatBar(0.14, 0.08, frameHotMat),
+      makeFlatBar(0.14, 0.08, frameMat),
+      makeFlatBar(0.12, 0.08, frameHotMat),
+      makeFlatBar(0.1, 0.08, frameHotMat),
+      makeFlatBar(0.075, 0.08, frameHotMat),
+      makeFlatBar(0.1, 0.08, frameHotMat),
+      makeFlatBar(0.08, 0.08, darkMat),
+    ];
+    frameBars.forEach((bar) => group.add(bar));
+
+    const saddle = new THREE.Group();
+    const saddleBase = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.05, 0.17), darkMat);
+    const saddleNose = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.035, 0.12), darkMat);
+    const saddleTail = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.06, 0.17), darkMat);
+    const seatRailRear = makeFlatBar(0.018, 0.02, railMat);
+    const seatRailFront = makeFlatBar(0.018, 0.02, railMat);
+    const seatClamp = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.05, 0.06), frameHotMat);
+    saddleBase.position.set(-0.02, 0, 0);
+    saddleNose.position.set(0.21, -0.005, 0);
+    saddleTail.position.set(-0.16, 0.025, 0);
+    seatRailRear.position.z = -0.05;
+    seatRailFront.position.z = 0.05;
+    placeFlatBar(seatRailRear, -0.12, -0.035, 0.08, -0.03, seatRailRear.position.z);
+    placeFlatBar(seatRailFront, -0.12, -0.035, 0.08, -0.03, seatRailFront.position.z);
+    seatClamp.position.set(-0.05, -0.04, 0);
+    saddle.add(saddleBase, saddleNose, saddleTail, seatRailRear, seatRailFront, seatClamp);
+    saddle.position.set(bikeGeo.saddle.x, bikeGeo.saddle.y, -0.02);
+    saddle.rotation.z = -0.03;
+    group.add(saddle);
+
+    const seatpost = new THREE.Mesh(new THREE.BoxGeometry(0.034, 0.42, 0.06), frameHotMat);
+    seatpost.position.set((bikeGeo.seatTop.x + bikeGeo.seatClamp.x) / 2, (bikeGeo.seatTop.y + bikeGeo.seatClamp.y) / 2, -0.03);
+    seatpost.rotation.z = -0.11;
+    group.add(seatpost);
+
+    const stem = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.24, 0.06), frameHotMat);
+    stem.position.set(bikeGeo.stemTop.x, bikeGeo.stemTop.y, 0.08);
+    stem.rotation.z = -1.12;
+    const handlebar = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.05, 0.06), darkMat);
+    handlebar.position.set(bikeGeo.handlebar.x, bikeGeo.handlebar.y, 0.1);
+    handlebar.rotation.z = -0.02;
+    const hoodRear = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.16, 0.06), darkMat);
+    hoodRear.position.set(bikeGeo.handlebar.x - 0.09, bikeGeo.handlebar.y + 0.07, 0.1);
+    hoodRear.rotation.z = -0.28;
+    const hoodFront = hoodRear.clone();
+    hoodFront.position.set(bikeGeo.handlebar.x + 0.09, bikeGeo.handlebar.y + 0.07, 0.1);
+    hoodFront.rotation.z = -0.14;
+    const dropRear = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.2, 0.06), darkMat);
+    dropRear.position.set(bikeGeo.handlebar.x - 0.14, bikeGeo.handlebar.y - 0.11, 0.1);
+    dropRear.rotation.z = 0.34;
+    const dropFront = dropRear.clone();
+    dropFront.position.set(bikeGeo.handlebar.x + 0.14, bikeGeo.handlebar.y - 0.11, 0.1);
+    dropFront.rotation.z = 0.22;
+    group.add(stem, handlebar, hoodRear, hoodFront, dropRear, dropFront);
+
+    const crank = new THREE.Group();
+    crank.position.set(bikeGeo.bb.x, bikeGeo.bb.y, 0.08);
+    const crankArmA = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.84, 0.04), railMat);
+    const crankArmB = crankArmA.clone();
+    crankArmB.rotation.z = Math.PI;
+    const pedalA = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.08, 0.06), darkMat);
+    const pedalB = pedalA.clone();
+    pedalA.position.y = 0.42;
+    pedalB.position.y = -0.42;
+    const chainring = new THREE.Mesh(new THREE.CircleGeometry(0.16, 18), railMat);
+    crank.add(crankArmA, crankArmB, pedalA, pedalB, chainring);
+    group.add(crank);
+
+    const road = new THREE.Mesh(
+      new THREE.PlaneGeometry(28, 3.8),
+      new THREE.MeshStandardMaterial({ color: 0x071426, emissive: 0x0f172a, emissiveIntensity: 0.2 })
+    );
+    road.position.set(0, -2.3, -0.2);
+    scene.add(road);
+
+    const skyline = new THREE.Group();
+    const skylineMatA = new THREE.MeshStandardMaterial({ color: 0x0f766e, emissive: 0x22d3ee, emissiveIntensity: 0.18, transparent: true, opacity: 0.62 });
+    const skylineMatB = new THREE.MeshStandardMaterial({ color: 0x7c3aed, emissive: 0xf472b6, emissiveIntensity: 0.14, transparent: true, opacity: 0.5 });
+    for (let i = 0; i < 14; i += 1) {
+      const h = 1.8 + (i % 5) * 0.7;
+      const w = 0.5 + (i % 3) * 0.25;
+      const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.2), i % 2 ? skylineMatA : skylineMatB);
+      b.position.set(-6 + i * 0.95, -0.15 + h / 2, -4 - (i % 4) * 0.15);
+      skyline.add(b);
+    }
+    scene.add(skyline);
+
+    function updateFrame() {
+      placeFlatBar(frameBars[0], bikeGeo.seatTop.x, bikeGeo.seatTop.y, bikeGeo.headTop.x, bikeGeo.headTop.y, 0.04);
+      placeFlatBar(frameBars[1], bikeGeo.rearAxle.x, bikeGeo.rearAxle.y, bikeGeo.seatTop.x, bikeGeo.seatTop.y, -0.03);
+      placeFlatBar(frameBars[2], bikeGeo.rearAxle.x, bikeGeo.rearAxle.y, bikeGeo.bb.x, bikeGeo.bb.y, 0.02);
+      placeFlatBar(frameBars[3], bikeGeo.bb.x, bikeGeo.bb.y, bikeGeo.headBottom.x, bikeGeo.headBottom.y, 0.03);
+      placeFlatBar(frameBars[4], bikeGeo.bb.x, bikeGeo.bb.y, bikeGeo.seatTop.x, bikeGeo.seatTop.y, -0.01);
+      placeFlatBar(frameBars[5], bikeGeo.headTop.x, bikeGeo.headTop.y, bikeGeo.headBottom.x, bikeGeo.headBottom.y, 0.05);
+      placeFlatBar(frameBars[6], bikeGeo.headBottom.x, bikeGeo.headBottom.y, bikeGeo.frontAxle.x, bikeGeo.frontAxle.y + 0.005, 0.07);
+      placeFlatBar(frameBars[7], bikeGeo.seatTop.x, bikeGeo.seatTop.y, bikeGeo.seatClamp.x, bikeGeo.seatClamp.y, -0.04);
+      placeFlatBar(frameBars[8], bikeGeo.headTop.x, bikeGeo.headTop.y, bikeGeo.handlebar.x, bikeGeo.handlebar.y, 0.07);
+    }
+
+    function resize() {
+      const rect = canvas.getBoundingClientRect();
+      renderer.setSize(rect.width, rect.height, false);
+      const aspect = rect.width / rect.height;
+      const orthoHeight = 4.2;
+      camera.left = -orthoHeight * aspect;
+      camera.right = orthoHeight * aspect;
+      camera.top = orthoHeight;
+      camera.bottom = -orthoHeight;
+      camera.updateProjectionMatrix();
+    }
+
+    const state = { speed: 28, cadence: 88, power: 180, theme: 'neon', tick: 0, lastMs: performance.now(), wheel: 0, pedal: 0 };
+    const themes = {
+      neon: { road: 0x071426, roadEmissive: 0x0f172a, fog: 0x060b16, skyA: 0x0f766e, skyB: 0x7c3aed, label: 'Neon' },
+      forest: { road: 0x10261e, roadEmissive: 0x14532d, fog: 0x0b1c14, skyA: 0x166534, skyB: 0x365314, label: 'Forest' },
+      alpine: { road: 0x172554, roadEmissive: 0x1d4ed8, fog: 0x0b1730, skyA: 0x1d4ed8, skyB: 0xf59e0b, label: 'Alpine' },
+    };
+
+    function applyTheme(name) {
+      const theme = themes[name] || themes.neon;
+      road.material.color.setHex(theme.road);
+      road.material.emissive.setHex(theme.roadEmissive);
+      scene.fog.color.setHex(theme.fog);
+      skyline.children.forEach((child, idx) => {
+        child.material.color.setHex(idx % 2 ? theme.skyA : theme.skyB);
+        child.material.emissive.setHex(idx % 2 ? theme.skyA : theme.skyB);
+      });
+      themeBadge.textContent = theme.label;
+    }
+
+    function syncControls() {
+      state.speed = Number(speedInput.value);
+      state.cadence = Number(cadenceInput.value);
+      state.power = Number(powerInput.value);
+      state.theme = themeInput.value;
+      speedOut.value = `${state.speed.toFixed(1)} km/h`;
+      cadenceOut.value = `${Math.round(state.cadence)} rpm`;
+      powerOut.value = `${Math.round(state.power)} W`;
+      applyTheme(state.theme);
+    }
+
+    [speedInput, cadenceInput, powerInput, themeInput].forEach((el) => el.addEventListener('input', syncControls));
+    syncControls();
+    updateFrame();
+    resize();
+    addEventListener('resize', resize);
+
+    function animate(now) {
+      const dt = Math.min(0.05, Math.max(1 / 240, (now - state.lastMs) / 1000));
+      state.lastMs = now;
+      state.tick += dt;
+      const nearVelocity = Math.max(0.45, state.speed * 0.09);
+      state.pedal -= Math.max(0.25, state.cadence * (Math.PI * 2 / 60)) * dt;
+      state.wheel -= nearVelocity * 4.8 * dt;
+      rearWheel.rotation.z = state.wheel;
+      frontWheel.rotation.z = state.wheel;
+      crank.rotation.z = state.pedal;
+      skyline.position.x = Math.sin(state.tick * 0.08) * 0.18;
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+    requestAnimationFrame(animate);
+  </script>
+</body>
+</html>
