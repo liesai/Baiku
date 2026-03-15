@@ -258,7 +258,7 @@ def run_web_ui(
         "true",
         "yes",
     }
-    ui.add_head_html(
+    shared_head_html = (
         """
         <script type="module">
           import * as THREE from '__THREE_MODULE_URL__';
@@ -2587,6 +2587,8 @@ def run_web_ui(
         .replace("__DMD_CYCLIST_URL__", DMD_CYCLIST_URL)
     )
 
+    ui.add_head_html(shared_head_html)
+
     templates = list_templates()
     workout_options: list[WorkoutOption] = []
     workout_option_by_label: dict[str, WorkoutOption] = {}
@@ -2657,6 +2659,7 @@ def run_web_ui(
 
     @ui.page("/bike-preview")
     def bike_preview_page() -> None:
+        ui.add_head_html(shared_head_html)
         client = ui.context.client
 
         async def push_preview_state() -> None:
