@@ -1647,7 +1647,7 @@ def run_web_ui(
             const bikeScale = 3.42 / 1000.0;
             const wheelSpec = {
               beadSeatRadius: (622 * bikeScale) / 2,
-              outerRadius: (672 * bikeScale) / 2,
+              outerRadius: (666 * bikeScale) / 2,
               erdRadius: (596 * bikeScale) / 2,
               tireWidth: 25 * bikeScale,
               rimDepth: 23 * bikeScale,
@@ -1665,8 +1665,8 @@ def run_web_ui(
               const headDx = Math.cos(73.0 * Math.PI / 180.0) * (168 * bikeScale);
               const headDy = Math.sin(73.0 * Math.PI / 180.0) * (168 * bikeScale);
               const headBottom = { x: headTop.x + headDx, y: headTop.y - headDy };
-              const seatClamp = { x: seatTop.x - 0.05, y: seatTop.y + 0.08 };
-              const saddle = { x: seatClamp.x - 0.02, y: seatClamp.y + 0.06 };
+              const seatClamp = { x: seatTop.x - 0.05, y: seatTop.y + 0.12 };
+              const saddle = { x: seatClamp.x - 0.02, y: seatClamp.y + 0.065 };
               const handlebar = { x: headTop.x + 0.3, y: headTop.y + 0.02 };
               const stemTop = { x: headTop.x + 0.11, y: headTop.y + 0.06 };
               return {
@@ -1793,7 +1793,7 @@ def run_web_ui(
             saddle.add(saddleBase, saddleNose, saddleTail, railRear, railFront, seatClamp);
             saddle.position.set(bikeGeo.saddle.x, bikeGeo.saddle.y, -0.02);
             saddle.rotation.z = -0.03;
-            const seatpost = new T.Mesh(new T.BoxGeometry(0.034, 0.34, 0.06), frameHotMat);
+            const seatpost = new T.Mesh(new T.BoxGeometry(0.034, 0.42, 0.06), frameHotMat);
             seatpost.position.set((bikeGeo.seatTop.x + bikeGeo.seatClamp.x) / 2, (bikeGeo.seatTop.y + bikeGeo.seatClamp.y) / 2, -0.03);
             seatpost.rotation.z = -0.11;
             const stem = new T.Mesh(new T.BoxGeometry(0.06, 0.24, 0.06), frameHotMat);
@@ -2064,7 +2064,7 @@ def run_web_ui(
                 placeFlatBar(frameBars[3], bikeGeo.bb.x, bikeGeo.bb.y, bikeGeo.headBottom.x, bikeGeo.headBottom.y, 0.03);
                 placeFlatBar(frameBars[4], bikeGeo.bb.x, bikeGeo.bb.y, bikeGeo.seatTop.x, bikeGeo.seatTop.y, -0.01);
                 placeFlatBar(frameBars[5], bikeGeo.headTop.x, bikeGeo.headTop.y, bikeGeo.headBottom.x, bikeGeo.headBottom.y, 0.05);
-                placeFlatBar(frameBars[6], bikeGeo.headBottom.x, bikeGeo.headBottom.y, bikeGeo.frontAxle.x, bikeGeo.frontAxle.y + 0.02, 0.07);
+                placeFlatBar(frameBars[6], bikeGeo.headBottom.x, bikeGeo.headBottom.y, bikeGeo.frontAxle.x, bikeGeo.frontAxle.y + 0.005, 0.07);
                 placeFlatBar(frameBars[7], bikeGeo.seatTop.x, bikeGeo.seatTop.y, bikeGeo.seatClamp.x, bikeGeo.seatClamp.y, -0.04);
                 placeFlatBar(frameBars[8], bikeGeo.headTop.x, bikeGeo.headTop.y, bikeGeo.handlebar.x, bikeGeo.handlebar.y, 0.07);
 
