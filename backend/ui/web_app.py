@@ -1877,6 +1877,14 @@ def run_web_ui(
               frontElbow: joint(0.07, skinFrontMat, 0.1),
             };
             Object.values(joints).forEach((mesh) => rider.add(mesh));
+            const riderBodyMeshes = [
+              riderShadow, riderAura,
+              torso, shorts, head,
+              rearThigh, rearCalf, frontThigh, frontCalf,
+              rearUpperArm, rearForearm, frontUpperArm, frontForearm,
+              rearFoot, frontFoot, rearHand, frontHand,
+              ...Object.values(joints),
+            ];
 
             function bendJoint(ax, ay, bx, by, lenA, lenB, bendSign) {
               const dx = bx - ax;
@@ -1911,6 +1919,7 @@ def run_web_ui(
               intensity: 'mid',
               action: 'steady',
               theme: 'neon',
+              previewMode: false,
               tick: 0,
               lastFrameMs: 0,
               pedal: 0,
@@ -1955,6 +1964,7 @@ def run_web_ui(
               state.intensity = sceneState.intensity || 'mid';
               state.action = sceneState.action || 'steady';
               state.theme = sceneState.theme || 'neon';
+              state.previewMode = !!sceneState.previewMode;
               state.tick += dt;
               const themeNeon = state.theme === 'neon';
               mount.style.display = themeNeon ? 'block' : 'none';
@@ -2046,6 +2056,7 @@ def run_web_ui(
                 rearWheel.rotation.z = state.wheel;
                 frontWheel.rotation.z = state.wheel;
                 crank.rotation.z = pedalAngle;
+                riderBodyMeshes.forEach((mesh) => { mesh.visible = !state.previewMode; });
 
                 placeFlatBar(frameBars[0], bikeGeo.seatTop.x, bikeGeo.seatTop.y, bikeGeo.headTop.x, bikeGeo.headTop.y, 0.04);
                 placeFlatBar(frameBars[1], bikeGeo.rearAxle.x, bikeGeo.rearAxle.y, bikeGeo.seatTop.x, bikeGeo.seatTop.y, -0.03);
@@ -2152,6 +2163,7 @@ def run_web_ui(
               intensity,
               action: action || 'steady',
               theme: scene.dataset.theme || 'forest',
+              previewMode: window.__velox_three_state ? !!window.__velox_three_state.previewMode : false,
             };
             if ((scene.dataset.theme || 'forest') === 'neon') {
               window.veloxEnsureThreeScene();
@@ -2192,9 +2204,28 @@ def run_web_ui(
             if (window.__velox_three_state) {
               window.__velox_three_state.theme = nextTheme;
             } else {
-              window.__velox_three_state = { speed: 0, cadence: 0, power: 0, intensity: 'mid', action: 'steady', theme: nextTheme };
+              window.__velox_three_state = {
+                speed: 0, cadence: 0, power: 0, intensity: 'mid',
+                action: 'steady', theme: nextTheme, previewMode: false,
+              };
             }
             if (nextTheme === 'neon') {
+              window.veloxEnsureThreeScene();
+            }
+          };
+          window.veloxSetPreviewMode = function(enabled) {
+            const scene = document.getElementById('ve-scene');
+            if (!scene) return;
+            if (window.__velox_three_state) {
+              window.__velox_three_state.previewMode = !!enabled;
+            } else {
+              window.__velox_three_state = {
+                speed: 0, cadence: 0, power: 0, intensity: 'mid',
+                action: 'steady', theme: scene.dataset.theme || 'neon',
+                previewMode: !!enabled,
+              };
+            }
+            if ((scene.dataset.theme || 'forest') === 'neon') {
               window.veloxEnsureThreeScene();
             }
           };
@@ -2570,6 +2601,78 @@ def run_web_ui(
     timeline_step_ranges: list[tuple[int, int, str]] = []
     metric_samples: list[tuple[int | None, float | None, float | None]] = []
 
+    def _scene_markup(theme: str = "neon") -> str:
+        return f"""
+                <div id="ve-scene" class="ve-scene" data-zone="ok" data-theme="{theme}">
+                  <div class="ve-bg ve-bg-sky"></div>
+                  <div class="ve-bg ve-bg-far"></div>
+                  <div class="ve-bg ve-bg-mid"></div>
+                  <div class="ve-bg ve-bg-front"></div>
+                  <div class="ve-bg ve-bg-overlay"></div>
+                  <div class="ve-road"></div>
+                  <div id="ve-three-layer" class="ve-three-layer"></div>
+                  <div class="ve-three-edge-fade left"></div>
+                  <div class="ve-three-edge-fade right"></div>
+                  <div id="ve-three-debug" class="ve-three-debug warn">Three script pending</div>
+                  <div id="ve-fx" class="ve-fx">BONUS!</div>
+                  <div class="ve-hud">
+                    <span id="ve-scene-theme-label" class="ve-scenery-badge">Neon night</span>
+                    <span id="ve-scene-action" class="ve-hud-action">HOLD</span>
+                    <span id="ve-scene-speed" class="ve-hud-speed">0,0 km/h</span>
+                  </div>
+                  <div class="ve-rider">
+                    <div class="ve-rider-shadow"></div>
+                    <div class="ve-rider-speedlines"></div>
+                    <div class="ve-rider-dust"></div>
+                    <div class="ve-rider-glow"></div>
+                    <div id="ve-sprite" class="ve-sprite"></div>
+                    <div class="ve-rider-occlusion"></div>
+                  </div>
+                </div>
+                """
+
+    @ui.page("/bike-preview")
+    def bike_preview_page() -> None:
+        with ui.column().classes("w-full max-w-5xl mx-auto gap-4 p-4"):
+            with ui.row().classes("w-full items-center justify-between gap-3 flex-wrap"):
+                ui.label("Bike Preview").classes("text-2xl font-semibold")
+                ui.link("Back to app", "/").classes("text-cyan-300 text-sm")
+            ui.label(
+                "Standalone bike-only preview. No BLE, no rider, local simulation controls."
+            ).classes("text-sm gb-muted")
+            ui.html(_scene_markup("neon")).classes("w-full")
+            with ui.card().classes("w-full gb-card"):
+                with ui.grid().classes("w-full grid-cols-1 md:grid-cols-4 gap-3"):
+                    preview_theme = ui.toggle(
+                        {"forest": "Forest", "alpine": "Alpine", "neon": "Neon"},
+                        value="neon",
+                    ).props("toggle-color=cyan glossy unelevated")
+                    preview_speed = ui.slider(min=0, max=45, value=28, step=0.5)
+                    preview_cadence = ui.slider(min=0, max=120, value=88, step=1)
+                    preview_power = ui.slider(min=0, max=400, value=180, step=5)
+                with ui.row().classes("w-full justify-between text-xs gb-muted"):
+                    ui.label("Theme")
+                    ui.label("Speed km/h")
+                    ui.label("Cadence rpm")
+                    ui.label("Power W")
+
+            def push_preview_state() -> None:
+                ui.run_javascript(
+                    "window.veloxSetPreviewMode(true);"
+                    f"window.veloxSetSceneTheme('{preview_theme.value or 'neon'}');"
+                    "window.veloxUpdateScene("
+                    f"{float(preview_speed.value or 0)},"
+                    f"{float(preview_cadence.value or 0)},"
+                    f"{float(preview_power.value or 0)},"
+                    "true,'steady');"
+                )
+
+            preview_theme.on_value_change(lambda _: push_preview_state())
+            preview_speed.on_value_change(lambda _: push_preview_state())
+            preview_cadence.on_value_change(lambda _: push_preview_state())
+            preview_power.on_value_change(lambda _: push_preview_state())
+            ui.timer(0.1, push_preview_state, once=True)
+
     with ui.column().classes("w-full gap-2") as setup_header:
         with ui.row().classes("w-full items-center justify-between gap-2"):
             ui.label("VELOX ENGINE").classes("text-xl font-semibold tracking-wide")
@@ -2584,6 +2687,7 @@ def run_web_ui(
                     ui.label("HM").classes("text-xs font-semibold")
                     hm_name_label = ui.label("not connected").classes("text-xs gb-muted")
                 open_connections_btn = ui.button("Connections").props("outline")
+                bike_preview_btn = ui.button("Bike preview").props("outline")
                 back_to_training_btn = ui.button("Back to training").props("outline")
                 back_to_training_btn.set_visibility(False)
         status_label = ui.label("Status: Not connected").classes("text-lg font-semibold")
@@ -2873,36 +2977,7 @@ def run_web_ui(
                         f"window.veloxSetSceneTheme('{e.value}');"
                     ),
                 ).props("toggle-color=cyan glossy unelevated")
-            ui.html(
-                """
-                <div id="ve-scene" class="ve-scene" data-zone="ok" data-theme="neon">
-                  <div class="ve-bg ve-bg-sky"></div>
-                  <div class="ve-bg ve-bg-far"></div>
-                  <div class="ve-bg ve-bg-mid"></div>
-                  <div class="ve-bg ve-bg-front"></div>
-                  <div class="ve-bg ve-bg-overlay"></div>
-                  <div class="ve-road"></div>
-                  <div id="ve-three-layer" class="ve-three-layer"></div>
-                  <div class="ve-three-edge-fade left"></div>
-                  <div class="ve-three-edge-fade right"></div>
-                  <div id="ve-three-debug" class="ve-three-debug warn">Three script pending</div>
-                  <div id="ve-fx" class="ve-fx">BONUS!</div>
-                  <div class="ve-hud">
-                    <span id="ve-scene-theme-label" class="ve-scenery-badge">Neon night</span>
-                    <span id="ve-scene-action" class="ve-hud-action">HOLD</span>
-                    <span id="ve-scene-speed" class="ve-hud-speed">0,0 km/h</span>
-                  </div>
-                  <div class="ve-rider">
-                    <div class="ve-rider-shadow"></div>
-                    <div class="ve-rider-speedlines"></div>
-                    <div class="ve-rider-dust"></div>
-                    <div class="ve-rider-glow"></div>
-                    <div id="ve-sprite" class="ve-sprite"></div>
-                    <div class="ve-rider-occlusion"></div>
-                  </div>
-                </div>
-                """
-            ).classes("w-full")
+            ui.html(_scene_markup("neon")).classes("w-full")
 
         live_chart = ui.echart(
             {
@@ -4418,6 +4493,7 @@ def run_web_ui(
     analytics_demo_switch.on_value_change(lambda _: on_analytics_demo_toggle())
     analytics_window_select.on_value_change(lambda _: on_analytics_window_change())
     open_connections_btn.on_click(on_open_connections)
+    bike_preview_btn.on_click(lambda: ui.navigate.to("/bike-preview"))
     back_to_training_btn.on_click(on_back_to_training_setup)
     ht_scan_btn.on_click(on_scan_ht)
     ht_connect_btn.on_click(on_connect_ht)
