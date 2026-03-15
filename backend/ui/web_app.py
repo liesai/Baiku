@@ -407,11 +407,14 @@ def run_web_ui(
             display: block;
             position: relative;
             width: 100%;
-            min-width: 100%;
+            max-width: 100%;
             height: 164px;
             border: 1px solid rgba(56, 189, 248, 0.35);
             border-radius: 12px;
             overflow: hidden;
+            box-sizing: border-box;
+            isolation: isolate;
+            contain: layout paint;
             background: linear-gradient(180deg, #0a2a4e 0%, #15426d 58%, #0f2f52 100%);
             --ve-bg-far-offset: 0px;
             --ve-bg-mid-offset: 0px;
@@ -499,11 +502,15 @@ def run_web_ui(
             opacity: 0;
             transition: opacity .24s ease-out;
             pointer-events: none;
+            overflow: hidden;
+            contain: layout paint;
           }
           .ve-three-canvas {
             display: block;
             width: 100%;
             height: 100%;
+            max-width: 100%;
+            max-height: 100%;
           }
           .ve-three-edge-fade {
             position: absolute;
@@ -1086,9 +1093,26 @@ def run_web_ui(
               debugNode.className = `ve-three-debug ${cls || ''}`.trim();
             };
             if (!mount || !root) return null;
+            const theme = root.dataset.theme || 'forest';
+            const visible = !!(root.offsetParent || root.getClientRects().length);
+            const sized = root.clientWidth > 0 && root.clientHeight > 0;
+            if (theme !== 'neon') {
+              root.dataset.threeReady = '0';
+              mount.innerHTML = '';
+              setDebug('Three idle', 'warn');
+              return null;
+            }
+            if (!visible || !sized) {
+              root.dataset.threeReady = '0';
+              setDebug('Three deferred', 'warn');
+              return null;
+            }
             if (window.__velox_three_scene && window.__velox_three_scene.mount === mount) {
               root.dataset.threeReady = '1';
               setDebug(`Three ${window.__velox_three_scene.glMode}`, 'ok');
+              if (typeof window.__velox_three_scene.resize === 'function') {
+                window.__velox_three_scene.resize();
+              }
               return window.__velox_three_scene;
             }
             if (!window.THREE) {
@@ -2093,7 +2117,9 @@ def run_web_ui(
               action: action || 'steady',
               theme: scene.dataset.theme || 'forest',
             };
-            window.veloxEnsureThreeScene();
+            if ((scene.dataset.theme || 'forest') === 'neon') {
+              window.veloxEnsureThreeScene();
+            }
             if (spriteNode) {
               const framePhase = Math.floor(state.frameTick) % 12;
               const frameMap = [0, 1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1];
@@ -2132,14 +2158,15 @@ def run_web_ui(
             } else {
               window.__velox_three_state = { speed: 0, cadence: 0, power: 0, intensity: 'mid', action: 'steady', theme: nextTheme };
             }
-            window.veloxEnsureThreeScene();
+            if (nextTheme === 'neon') {
+              window.veloxEnsureThreeScene();
+            }
           };
-          window.setTimeout(() => {
-            if (window.veloxSetSceneTheme) window.veloxSetSceneTheme('neon');
-            if (window.veloxEnsureThreeScene) window.veloxEnsureThreeScene();
-          }, 0);
           window.addEventListener('velox-three-ready', () => {
-            if (window.veloxEnsureThreeScene) window.veloxEnsureThreeScene();
+            const scene = document.getElementById('ve-scene');
+            if (scene && (scene.dataset.theme || 'forest') === 'neon' && window.veloxEnsureThreeScene) {
+              window.veloxEnsureThreeScene();
+            }
           });
           window.veloxPinballFx = function(kind, label) {
             const scene = document.getElementById('ve-scene');
